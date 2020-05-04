@@ -30,7 +30,6 @@ interface JanusSubscriberOptions {
 	room_id:string,
 	feed:string,
 	configuration?,
-	onIceConnectionStateChange?,
 	onTerminated:() => void
 }
 
@@ -60,7 +59,6 @@ class JanusSubscriber extends EventTarget {
 		timer: any
 	}
 	onTerminated:() => void
-	onIceConnectionStateChange
 	attached: boolean
 
 
@@ -73,8 +71,7 @@ class JanusSubscriber extends EventTarget {
 			room_id,
 			feed,
 			configuration,
-			onTerminated,
-			onIceConnectionStateChange
+			onTerminated
 		} = options;
 
 		this.id = uuidv1();
@@ -106,9 +103,7 @@ class JanusSubscriber extends EventTarget {
 			tsbefore: null,
 			timer: null
 		};
-
-		this.onIceConnectionStateChange = onIceConnectionStateChange;
-
+		
 		this.createPeerConnection();
 
 		this.addEventListener("leaving", () => {
@@ -173,10 +168,6 @@ class JanusSubscriber extends EventTarget {
 		
 		this.pc.oniceconnectionstatechange = (event) => {
 			
-			if (this.onIceConnectionStateChange) {
-				this.onIceConnectionStateChange(event);
-			}
-
 		};
 
 		this.pc.onicecandidate = (event) => {
