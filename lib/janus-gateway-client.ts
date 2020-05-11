@@ -266,7 +266,7 @@ export class JanusClient {
 
 
 
-	//TODO janus_videoroom.c issue leaving equal to zero when string_ids enabled
+	//TODO janus_videoroom.c issue leaving equal to zero when string_ids enabled SHOULD BE FIXED ON MASTER
 	private handleIssueLeavingUnknown = () => {
 
 		this._pendingLeaving.push({});
