@@ -277,8 +277,6 @@ export class JanusClient {
 
 	private onEvent = async (json) => {
 		
-		console.log('ON EVENT', json);
-
 		if (json.type==="trickle") {
 			const {
 				sender,
@@ -298,7 +296,10 @@ export class JanusClient {
 			const publishers : Participant[] = json.data;
 			this.onPublishers(publishers);
 		} else if (json.type==="media") {
-			const { sender, data } = json;
+			const {
+				sender, 
+				data 
+			} = json;
 			const event = new Event('media', data)
 			if (this.publisher.handle_id===sender) {
 				this.publisher.dispatchEvent(event);
@@ -311,30 +312,25 @@ export class JanusClient {
 				}
 			}
 		} else if (json.type==="leaving") {
-			const {
-				leaving, 
-				sender
+			const { 
+				leaving 
 			} = json.data;
-
 			const event = new Event('leaving');
-			
-			if (leaving===0) {
-				this.handleIssueLeavingUnknown();
-			} else if (this.publisher.handle_id===leaving) {
-				this.publisher.dispatchEvent(event);
-			} else {
-				for(const id in this.subscribers) {
-					const subscriber = this.subscribers[id];
-					if (subscriber.handle_id===leaving) {
-						subscriber.dispatchEvent(event);
-					}
+			for(const id in this.subscribers) {
+				const subscriber = this.subscribers[id];
+				if (subscriber.feed===leaving) {
+					subscriber.dispatchEvent(event);
 				}
 			}
 		} else if (json.type==="internal") {
-			for(const id in this.subscribers) {
-				const subscriber = this.subscribers[id];
-				if (subscriber.handle_id===json.sender) {
-					console.log('subscriber event', json);
+			if (this.publisher.handle_id===json.sender) {
+				console.log('publisher event', json);
+			} else {
+				for(const id in this.subscribers) {
+					const subscriber = this.subscribers[id];
+					if (subscriber.handle_id===json.sender) {
+						console.log('subscriber event', json);
+					}
 				}
 			}
 		}
@@ -389,17 +385,6 @@ export class JanusClient {
 				room_id: this.room_id,
 				feed,
 				configuration: {},
-				onIceConnectionStateChange:(event) => {
-					
-					if (event.target.iceConnectionState==="disconnected") {
-						if (this._pendingLeaving.length > 0) {
-							this._pendingLeaving.pop();
-							const event = new Event('leaving');
-							subscriber.dispatchEvent(event);
-						}
-					}
-
-				},
 				onTerminated: () => {
 	
 					delete this.subscribers[feed];
