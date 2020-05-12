@@ -55,6 +55,7 @@
     "eslint-loader": "^3.0.2",
     "eslint-plugin-react": "^7.16.0",
     "file-loader": "^5.1.0",
+    "freeice": "^2.2.2",
     "fs-extra": "^8.1.0",
     "image-webpack-loader": "^6.0.0",
     "json2mq": "^0.2.0",
