@@ -51,7 +51,7 @@ interface JanusOptions {
 
 
 
-export class JanusClient {
+class JanusClient {
 	server:string
 	room_id:string
 	ws:ReconnectingWebSocket
@@ -401,3 +401,7 @@ export class JanusClient {
 	}
 	
 }
+
+
+
+export default JanusClient;
