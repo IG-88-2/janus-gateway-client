@@ -485,7 +485,6 @@ class JanusSubscriber extends EventTarget {
 
 
 	}
-	
 }
 
 

@@ -21,12 +21,11 @@
 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 	OTHER DEALINGS IN THE SOFTWARE.
 */
-
 import { v1 as uuidv1 } from 'uuid';
+import { logger } from './logger';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import JanusPublisher from './publisher';
 import JanusSubscriber from './subscriber';
-import { logger } from './logger';
 
 //v1
 
@@ -116,7 +115,6 @@ class JanusClient {
 					}
 				}
 			}
-
 		});
 
 		this.ws.addEventListener('open', () => {
@@ -162,7 +160,6 @@ class JanusClient {
 			this.notifyConnected = () => resolve();
 
 		});
-
 	}
 
 
@@ -181,7 +178,6 @@ class JanusClient {
 		this.subscribers = {};
 
 		this.ws.close();
-		
 	}
 
 
@@ -201,7 +197,6 @@ class JanusClient {
 		}
 		
 		this.subscribers = {};
-
 	}
 
 
@@ -209,6 +204,7 @@ class JanusClient {
 	private transaction = (request) => {
 
 		const timeout = this.transactionTimeout;
+
 		const id = uuidv1();
 
 		request.transaction = id;
@@ -255,7 +251,6 @@ class JanusClient {
 		this.ws.send(r);
 
 		return p;
-
 	}
 
 

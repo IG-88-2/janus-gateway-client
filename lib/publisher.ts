@@ -262,9 +262,11 @@ class JanusPublisher extends EventTarget {
 			let tracks = stream.getTracks();
 
 			let videoTrack = tracks.find((t) => t.kind==="video");
+
 			let audioTrack = tracks.find((t) => t.kind==="audio");
 			
 			let vt = getTransceiver(this.pc, "video");
+
 			let at = getTransceiver(this.pc, "audio");
 			
 			if (vt && at) {
@@ -276,6 +278,7 @@ class JanusPublisher extends EventTarget {
 			}
 			
 			vt.sender.replaceTrack(videoTrack);
+			
 			at.sender.replaceTrack(audioTrack);
 			
 			return this.pc.createOffer({
