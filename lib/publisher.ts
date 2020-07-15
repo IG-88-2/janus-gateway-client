@@ -24,6 +24,7 @@
 
 import { v1 as uuidv1 } from 'uuid';
 import { getTransceiver } from './utils';
+import { logger } from './logger';
 
 class JanusPublisher extends EventTarget {
 	id: string
@@ -166,37 +167,37 @@ class JanusPublisher extends EventTarget {
 		
 		this.pc.oniceconnectionstatechange = (event) => {
 			
-			console.log('oniceconnectionstatechange', this.pc.iceConnectionState);
+			logger.info(`[publisher] oniceconnectionstatechange ${this.pc.iceConnectionState}`);
 			
 		};
 		
 		this.pc.onnegotiationneeded = () => {
 
-			console.log('onnegotiationneeded', this.pc.signalingState);
+			logger.info(`[publisher] onnegotiationneeded ${this.pc.signalingState}`);
 
 		};
 
 		this.pc.onicegatheringstatechange = e => {
 			
-			console.log('onicegatheringstatechange', this.pc.iceGatheringState);
+			logger.info(`[publisher] onicegatheringstatechange ${this.pc.iceGatheringState}`);
 
 		};
 		
 		this.pc.onsignalingstatechange = e => {
 			
-			console.log('onicegatheringstatechange', this.pc.signalingState);
+			logger.info(`[publisher] onicegatheringstatechange ${this.pc.signalingState}`);
 			
 		};
 
 		this.pc.onicecandidateerror = error => {
 		
-			console.log(error);
+			logger.error(error);
 		
 		};
 		
 		this.pc.onstatsended = stats => {
 
-			console.log('onstatsended', stats);
+			logger.json(stats);
 			
 		};
 		

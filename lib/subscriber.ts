@@ -24,6 +24,7 @@
 
 import { v1 as uuidv1 } from 'uuid';
 import { getTransceiver } from './utils';
+import { logger } from './logger';
 
 interface JanusSubscriberOptions {
 	transaction:any, 
@@ -107,9 +108,7 @@ class JanusSubscriber extends EventTarget {
 		this.createPeerConnection();
 
 		this.addEventListener("leaving", () => {
-
-			console.log('on leaving internal');
-
+			
 			this.terminate();
 
 		});
@@ -216,7 +215,7 @@ class JanusSubscriber extends EventTarget {
 			
 			event.track.onended = (e) => {
 				
-				console.log('track onended', e);
+				logger.info('[subscriber] track onended');
 
 			};
 
@@ -236,34 +235,33 @@ class JanusSubscriber extends EventTarget {
 		
 		this.pc.onnegotiationneeded = () => {
 
-			console.log(this.pc.signalingState);
+			logger.info(this.pc.signalingState);
 
 		};
 
 		this.pc.onicecandidateerror = error => {
 		
-			console.log(error);
+			logger.error(error);
 		
 		};
 
 		this.pc.onicegatheringstatechange = e => {
 
-			console.log(this.pc.iceGatheringState);
+			logger.info(this.pc.iceGatheringState);
 
 		};
 		
 		this.pc.onsignalingstatechange = e => {
 
-			console.log('onsignalingstatechange', this.pc.signalingState);
+			logger.info(`onsignalingstatechange ${this.pc.signalingState}`);
 			
 		};
 		
 		this.pc.onstatsended = stats => {
 
-			console.log(stats);
+			logger.info(stats);
 			
 		};
-		
 	}
 
 
@@ -280,7 +278,6 @@ class JanusSubscriber extends EventTarget {
 		}
 		
 		return this.transaction(request);
-		
 	}
 
 
@@ -288,7 +285,6 @@ class JanusSubscriber extends EventTarget {
 	public receiveTrickleCandidate = (candidate) : void => {
 
 		this.candidates.push(candidate);
-
 	}
 
 
@@ -331,9 +327,7 @@ class JanusSubscriber extends EventTarget {
 				return answer;
 
 			});
-
 		});
-
 	}
 	
 
@@ -354,7 +348,6 @@ class JanusSubscriber extends EventTarget {
 		this.attached = true;
 
 		return result;
-
 	}
 
 
@@ -372,7 +365,6 @@ class JanusSubscriber extends EventTarget {
 		};
 
 		return this.transaction(request);
-
 	}
 
 
@@ -389,7 +381,6 @@ class JanusSubscriber extends EventTarget {
 		};
 
 		return this.transaction(request);
-
 	}
 
 

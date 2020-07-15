@@ -26,12 +26,9 @@ import { v1 as uuidv1 } from 'uuid';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import JanusPublisher from './publisher';
 import JanusSubscriber from './subscriber';
+import { logger } from './logger';
 
-//TODO on left room
-//terminate subscriber
-//getStats
-//full trickle
-//TODO ADD MEETECHO LICENSE EVERYWHERE
+//v1
 
 interface Participant {
 	id: string,
@@ -65,7 +62,6 @@ class JanusClient {
 	onPublisher: (publisher:JanusPublisher) => void
 	onError: (error:any) => void
 	notifyConnected: () => void
-	_pendingLeaving: any[]
 
 	constructor(options:JanusOptions) {
 
@@ -85,8 +81,6 @@ class JanusClient {
 		this.onSubscriber = onSubscriber;
 		this.onError = onError;
 		this.transactionTimeout = 10000;
-		this._pendingLeaving = [];
-		
 	}
 
 
@@ -159,7 +153,7 @@ class JanusClient {
 		
 		this.ws.addEventListener('error', error => {
 			
-			console.error(error);
+			logger.error(error);
 
 		});
 
@@ -266,15 +260,6 @@ class JanusClient {
 
 
 
-	//TODO janus_videoroom.c issue leaving equal to zero when string_ids enabled SHOULD BE FIXED ON MASTER
-	private handleIssueLeavingUnknown = () => {
-
-		this._pendingLeaving.push({});
-
-	}
-
-
-
 	private onEvent = async (json) => {
 		
 		if (json.type==="trickle") {
@@ -324,17 +309,16 @@ class JanusClient {
 			}
 		} else if (json.type==="internal") {
 			if (this.publisher.handle_id===json.sender) {
-				console.log('publisher event', json);
+
 			} else {
 				for(const id in this.subscribers) {
 					const subscriber = this.subscribers[id];
 					if (subscriber.handle_id===json.sender) {
-						console.log('subscriber event', json);
+						
 					}
 				}
 			}
 		}
-		
 	}
 
 
@@ -363,7 +347,6 @@ class JanusClient {
 		this.onPublishers(publishers);
 
 		this.onPublisher(this.publisher);
-		
 	}
 
 
@@ -397,9 +380,7 @@ class JanusClient {
 			this.onSubscriber(subscriber);
 
 		}
-
 	}
-	
 }
 
 
