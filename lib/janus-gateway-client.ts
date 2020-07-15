@@ -322,6 +322,19 @@ class JanusClient {
 
 
 
+	public createRoom = (description:string) => {
+
+		return this.transaction({ 
+			type : "create_room", 
+			load : {
+				description
+			} 
+		});
+
+	}
+
+
+
 	public join = async (room_id:string) : Promise<void> => {
 		
 		this.room_id = room_id;
