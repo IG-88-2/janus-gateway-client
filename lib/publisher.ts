@@ -336,20 +336,35 @@ class JanusPublisher extends EventTarget {
 
 
 
-	public configure = async ({ jsep }) => {
+	public configure = async (data) => {
 
-		const request = {
+		const request : any = {
 			type: "configure",
 			load: {
 				room_id: this.room_id,
-				jsep
+				handle_id: this.handle_id,
+				ptype: "publisher"
 			}
 		};
 
+		if (data.jsep) {
+			request.load.jsep = data.jsep;
+		}
+
+		if (data.audio!==undefined) {
+			request.load.audio = data.audio;
+		}
+
+		if (data.video!==undefined) {
+			request.load.video = data.video;
+		}
+		
 		const configureResponse = await this.transaction(request);
 
-		await this.pc.setRemoteDescription(configureResponse.load.jsep);
-		
+		if (configureResponse.load.jsep) {
+			await this.pc.setRemoteDescription(configureResponse.load.jsep);
+		}
+
 		if (this.candidates) {
 			this.candidates.forEach((candidate) => {
 				if (!candidate || candidate.completed) {
@@ -362,6 +377,8 @@ class JanusPublisher extends EventTarget {
 		}
 		
 		this.publishing = true;
+
+		return configureResponse;
 
 	}
 
@@ -508,51 +525,6 @@ class JanusPublisher extends EventTarget {
 		
 		return result;
 		
-	}
-
-
-
-	public pause = async ({
-		audio,
-		video
-	}) => {
-
-		const request = {
-			type: "pause",
-			load: {
-				room_id: this.room_id,
-				audio,
-				video
-			}
-		};
-
-		const pauseResponse = await this.transaction(request);
-
-		return pauseResponse;
-
-	}
-
-
-
-	//TODO use configure
-	public resume = async ({
-		audio,
-		video
-	}) => {
-
-		const request = {
-			type: "resume",
-			load: {
-				room_id: this.room_id,
-				audio,
-				video
-			}
-		};
-
-		const resumeResponse = await this.transaction(request);
-
-		return resumeResponse;
-
 	}
 	
 }

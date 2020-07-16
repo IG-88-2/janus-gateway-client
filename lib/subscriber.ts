@@ -313,7 +313,7 @@ class JanusSubscriber extends EventTarget {
 				at.direction = "recvonly";
 				vt.direction = "recvonly";
 			} else {
-				vt = this.pc.addTransceiver("video", { direction: "recvonly" }); //"recvonly" "sendonly" "sendrecv" "inactive"
+				vt = this.pc.addTransceiver("video", { direction: "recvonly" });
 				at = this.pc.addTransceiver("audio", { direction: "recvonly" });
 			}
 			
@@ -448,43 +448,6 @@ class JanusSubscriber extends EventTarget {
 
 	}
 
-
-
-	mute = () => {
-
-
-
-	}
-
-
-
-	unmute = () => {
-
-
-
-	}
-
-
-
-	pause = ({
-		video,
-		audio
-	}) => {
-
-
-
-	}
-
-
-
-	resume = ({
-		video,
-		audio
-	}) => {
-
-
-
-	}
 }
 
 

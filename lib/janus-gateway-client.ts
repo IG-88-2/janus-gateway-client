@@ -201,6 +201,58 @@ class JanusClient {
 
 
 
+	public mute = async () => {
+
+		if (!this.publisher) {
+			throw new Error('you should join room first');
+		}
+
+		return await this.publisher.configure({
+			audio:false
+		});
+	}
+
+
+
+	public unmute = async () => {
+
+		if (!this.publisher) {
+			throw new Error('you should join room first');
+		}
+
+		return await this.publisher.configure({
+			audio:true
+		});
+	}
+
+
+
+	public pause = async () => {
+
+		if (!this.publisher) {
+			throw new Error('you should join room first');
+		}
+
+		return await this.publisher.configure({
+			video:false
+		});
+	}
+
+
+
+	public resume = async () => {
+
+		if (!this.publisher) {
+			throw new Error('you should join room first');
+		}
+
+		return await this.publisher.configure({
+			video:true
+		});
+	}
+
+
+
 	private transaction = (request) => {
 
 		const timeout = this.transactionTimeout;
@@ -276,7 +328,7 @@ class JanusClient {
 			const publishers : Participant[] = json.data;
 			this.onPublishers(publishers);
 		} else if (json.type==="media") {
-			const {
+			const { 
 				sender, 
 				data 
 			} = json;
@@ -303,12 +355,15 @@ class JanusClient {
 				}
 			}
 		} else if (json.type==="internal") {
-			if (this.publisher.handle_id===json.sender) {
 
+			logger.json(json);
+
+			if (this.publisher && this.publisher.handle_id===json.sender) {
+			
 			} else {
 				for(const id in this.subscribers) {
 					const subscriber = this.subscribers[id];
-					if (subscriber.handle_id===json.sender) {
+					if (subscriber && subscriber.handle_id===json.sender) {
 						
 					}
 				}
@@ -360,7 +415,7 @@ class JanusClient {
 
 
 	private onPublishers = async (publishers : Participant[]) : Promise<void> => {
-
+		
 		for(let i = 0; i < publishers.length; i++) {
 
 			const publisher = publishers[i];
