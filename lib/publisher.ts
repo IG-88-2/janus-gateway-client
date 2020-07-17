@@ -26,6 +26,8 @@ import { v1 as uuidv1 } from 'uuid';
 import { getTransceiver } from './utils';
 import { logger } from './logger';
 
+
+
 class JanusPublisher extends EventTarget {
 	id: string
 	room_id: string
@@ -88,7 +90,7 @@ class JanusPublisher extends EventTarget {
 		};
 
 		this.createPeerConnection();
-	  
+
 	}
 
 
@@ -102,7 +104,7 @@ class JanusPublisher extends EventTarget {
 		const response = await this.joinandconfigure(jsep);
 
 		return response.load.data.publishers;
-		
+
 	}
 
 
@@ -214,10 +216,10 @@ class JanusPublisher extends EventTarget {
 				handle_id: this.handle_id,
 				candidate
 			}
-		}
+		};
 		
 		return this.transaction(request);
-		
+
 	}
 
 

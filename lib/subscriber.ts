@@ -106,12 +106,6 @@ class JanusSubscriber extends EventTarget {
 		};
 		
 		this.createPeerConnection();
-
-		this.addEventListener("leaving", () => {
-			
-			this.terminate();
-
-		});
 	  
 	}
 
@@ -416,6 +410,8 @@ class JanusSubscriber extends EventTarget {
 		this.attached = false;
 
 		const result = await this.transaction(request);
+
+		this.handle_id = undefined;
 		
 		return result;
 		

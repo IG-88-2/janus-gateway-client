@@ -1,23 +1,55 @@
+import { Consola, BrowserReporter } from 'consola';
+const moment = require('moment');
+
+
+
+const _logger : any = new Consola({
+    level: 3,
+    reporters: [
+      new BrowserReporter()
+    ]
+});
+
+
+
+const getDatePrefix = () => {
+
+    const date = moment().format('H:mm:ss:SSS');
+
+    return date;
+
+};
+
+
+
 export const logger = {
-	info : (message) => {
+    success: (...args) => {
+        
+        _logger.success(getDatePrefix(), ...args);
 
-		console.log("\x1b[32m", `[janus-gateway-client] ${message}`);
-	},
-	error : (message) => {
+    },
+    info: (...args) => {
+        
+        _logger.info(getDatePrefix(), ...args);
+        
+    },
+    error: (error:any) => {
+        
+        _logger.error(error);
 
-		if (typeof message==="string") {
-			console.log("\x1b[31m", `[janus-gateway-client] ${message}`);
-		} else {
-			try {
-				const string = JSON.stringify(message, null, 2);
-				console.log("\x1b[31m", `[janus-gateway-client] ${string}`);
-			} catch(error) {}
+    },
+    json: (...args) => {
+        
+        _logger.info(`JSON`, getDatePrefix(), ...args);
+
+    },
+    tag: (tag:string, type:`success` | `info` | `error`) => (...args) => {
+        
+        const tagged = _logger.withTag(tag);
+        
+        if (tagged[type]) {
+            tagged[type](getDatePrefix(), ...args);
 		}
-	},
-	json : (object) => {
-
-		const string = JSON.stringify(object, null, 2); 
-
-		console.log("\x1b[37m", `[janus-gateway-client] ${string}`);
-	}
+		
+    }
 };

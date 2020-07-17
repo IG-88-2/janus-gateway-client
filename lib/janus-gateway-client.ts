@@ -59,7 +59,7 @@ class JanusClient {
 	transactionTimeout:number
 	onSubscriber: (subscriber:JanusSubscriber) => void
 	onPublisher: (publisher:JanusPublisher) => void
-	onError: (error:any) => void
+	_onError: (error:any) => void
 	notifyConnected: () => void
 
 	constructor(options:JanusOptions) {
@@ -78,8 +78,18 @@ class JanusClient {
 		this.calls = {};
 		this.onPublisher = onPublisher;
 		this.onSubscriber = onSubscriber;
-		this.onError = onError;
+		this._onError = onError;
 		this.transactionTimeout = 10000;
+	}
+
+
+
+	private onError = (error) => {
+
+		if (this._onError) {
+			this._onError(error);
+		}
+
 	}
 
 
@@ -96,65 +106,14 @@ class JanusClient {
 			}
 		);
 
-		this.ws.addEventListener('message', (response:MessageEvent) => {
-			
-			let message = null;
+		this.ws.addEventListener('message', this.onMessage);
 
-			try {
-				message = JSON.parse(response.data);
-			} catch(error) {}
-
-			if (message) {
-				const id = message.transaction;
-				if (!id) {
-					this.onEvent(message);
-				} else {
-					const resolve = this.calls[id];
-					if (resolve) {
-						resolve(message);
-					}
-				}
-			}
-		});
-
-		this.ws.addEventListener('open', () => {
-
-			this.connected = true;
-
-			if (this.notifyConnected) {
-				this.notifyConnected();
-				delete this.notifyConnected;
-			}
-
-			this.keepAliveInterval = setInterval(() => {
-				
-				this.transaction(({ type:'keepalive' }))
-				.catch((error) => {
-
-					this.onError(error);
-
-				});
-
-			}, 5000);
-
-		});
+		this.ws.addEventListener('open', this.onOpen);
 		
-        this.ws.addEventListener('close', () => {
-
-			this.connected = false;
-
-			clearInterval(this.keepAliveInterval);
-
-			this.keepAliveInterval = undefined;
-			
-		});
+        this.ws.addEventListener('close', this.onClose);
 		
-		this.ws.addEventListener('error', error => {
-			
-			logger.error(error);
-
-		});
-
+		this.ws.addEventListener('error', this.onError);
+		
 		return new Promise((resolve) => {
 
 			this.notifyConnected = () => resolve();
@@ -164,20 +123,103 @@ class JanusClient {
 
 
 
+	private onMessage = (response:MessageEvent) => {
+			
+		let message = null;
+
+		try {
+			message = JSON.parse(response.data);
+		} catch(error) {}
+
+		if (message) {
+			const id = message.transaction;
+			if (!id) {
+				this.onEvent(message);
+			} else {
+				const resolve = this.calls[id];
+				if (resolve) {
+					resolve(message);
+				}
+			}
+		}
+	}
+
+
+
+	private onOpen = () => {
+
+		this.connected = true;
+
+		if (this.notifyConnected) {
+			this.notifyConnected();
+			delete this.notifyConnected;
+		}
+
+		this.keepAliveInterval = setInterval(() => {
+			
+			this.transaction(({ type:'keepalive' }))
+			.catch((error) => {
+
+				this.onError(error);
+
+			});
+
+		}, 5000);
+
+	}
+
+
+
+	private onClose = () => {
+
+		logger.info(`onClose - connection closed...`);
+
+		this.connected = false;
+
+		clearInterval(this.keepAliveInterval);
+
+		this.keepAliveInterval = undefined;
+		
+	}
+
+
+
 	public terminate = async () => {
 		
 		if (this.publisher) {
+			logger.info(`terminate: terminate publisher ${this.publisher.handle_id}...`);
 			await this.publisher.terminate();
 		}
 		
 		for(const id in this.subscribers) {
 			const subscriber = this.subscribers[id];
+			const event = new Event('leaving');
+			subscriber.dispatchEvent(event);
+			logger.info(`terminate: terminate subscriber ${subscriber.handle_id}...`);
 			await subscriber.terminate();
 		}
 
 		this.subscribers = {};
 
+		logger.info(`terminate: remove event listeners...`);
+		
+		this.ws.removeEventListener('message', this.onMessage);
+
+		this.ws.removeEventListener('open', this.onOpen);
+		
+        this.ws.removeEventListener('close', this.onClose);
+		
+		this.ws.removeEventListener('error', this.onError);
+		
+		logger.info(`terminate: close connection...`);
+
+		//???
 		this.ws.close();
+
+		this.onClose();
+
+		this.ws = undefined;
+
 	}
 
 
@@ -197,6 +239,7 @@ class JanusClient {
 		}
 		
 		this.subscribers = {};
+
 	}
 
 
@@ -282,11 +325,12 @@ class JanusClient {
 			const f = (message) => {
 				
 				if (message.transaction===id) {
-					if (timeout){
+					if (timeout) {
 						clearTimeout(t);
 					}
 					delete this.calls[id];
 					if (message.type==="error") {
+						logger.error(request);
 						const error = new Error(message.load);
 						reject(error);
 					} else {
