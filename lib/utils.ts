@@ -1,6 +1,26 @@
-const freeice = require('freeice');
-const moreIce = freeice();
+/*
+	The MIT License (MIT)
 
+	Copyright (c) 2016 Meetecho
+
+	Permission is hereby granted, free of charge, to any person obtaining
+	a copy of this software and associated documentation files (the "Software"),
+	to deal in the Software without restriction, including without limitation
+	the rights to use, copy, modify, merge, publish, distribute, sublicense,
+	and/or sell copies of the Software, and to permit persons to whom the
+	Software is furnished to do so, subject to the following conditions:
+
+	The above copyright notice and this permission notice shall be included
+	in all copies or substantial portions of the Software.
+
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+	OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+	THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+	OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+	OTHER DEALINGS IN THE SOFTWARE.
+*/
 export const getResolution = (media) => {
 
 	let width = 0;
@@ -58,33 +78,6 @@ export const getResolution = (media) => {
 
 
 
-
-export const getMaxBitrates = (simulcastMaxBitrates) => {
-
-	const maxBitrates = {
-		high: 900000,
-		medium: 300000,
-		low: 100000,
-	};
-
-	if (simulcastMaxBitrates) {
-		if (simulcastMaxBitrates.high) {
-			maxBitrates.high = simulcastMaxBitrates.high;
-		}
-		if (simulcastMaxBitrates.medium) {
-			maxBitrates.medium = simulcastMaxBitrates.medium;
-		}
-		if (simulcastMaxBitrates.low) {
-			maxBitrates.low = simulcastMaxBitrates.low;
-		}
-	}
-
-	return maxBitrates;
-
-}
-
-
-
 export const getTransceiver = (pc:RTCPeerConnection, kind:"audio" | "video") : RTCRtpTransceiver => {
 
 	let transceiver = null;
@@ -106,236 +99,3 @@ export const getTransceiver = (pc:RTCPeerConnection, kind:"audio" | "video") : R
 	return transceiver;
 
 }
-
-
-
-export const addTracks = (stream, config) => {
-	
-	stream.getTracks().forEach((track) => {
-		
-		if (track.kind === "audio") {
-			config.pc.addTrack(track, stream);
-		} else {
-			const maxBitrates = getMaxBitrates(null);
-			config.pc.addTransceiver(track, {
-				direction: "sendrecv",
-				streams: [stream],
-				sendEncodings: [
-					{ rid: "h", active: true, maxBitrate: maxBitrates.high },
-					{ rid: "m", active: true, maxBitrate: maxBitrates.medium, scaleResolutionDownBy: 2 },
-					{ rid: "l", active: true, maxBitrate: maxBitrates.low, scaleResolutionDownBy: 4 }
-				]
-			});
-		}
-
-	});
-
-}
-
-
-
-export const updateExistingAudioStream = (config, stream) => {
-
-	const { myStream, pc } = config;
-	
-	myStream.addTrack(stream.getAudioTracks()[0]);
-	
-	const audioTransceiver = getTransceiver(pc, "audio");
-
-	if (audioTransceiver && audioTransceiver.sender) {
-		audioTransceiver.sender.replaceTrack(stream.getAudioTracks()[0]);
-	} else {
-		pc.addTrack(stream.getAudioTracks()[0], stream);
-	}
-	
-}
-
-
-
-export const updateExistingVideoStream = (config, stream) => {
-
-	const { myStream, pc } = config;
-	
-	myStream.addTrack(stream.getVideoTracks()[0]);
-	
-	const videoTransceiver = getTransceiver(pc, "video");
-
-	if (videoTransceiver && videoTransceiver.sender) {
-		videoTransceiver.sender.replaceTrack(stream.getVideoTracks()[0]);
-	} else {
-		pc.addTrack(stream.getVideoTracks()[0], stream);
-	}
-
-}
-
-
-
-export const pause = (n:number) => new Promise((resolve) => setTimeout(() => resolve(), n));
-
-
-/*
-stun.l.google.com:19305
-stun1.l.google.com:19305
-stun2.l.google.com:19305
-stun3.l.google.com:19305
-stun4.l.google.com:19305
-*/
-/*
-remoteFeed.rfid = id;
-remoteFeed.rfdisplay = display;
-remoteFeed.simulcastStarted = true;
-substream, temporal 
-private_id
-*/
-/*
-updateExistingAudioStream = (config, stream) => {
-
-	const { myStream, pc } = config;
-	
-	myStream.addTrack(stream.getAudioTracks()[0]);
-	
-	const audioTransceiver = getTransceiver(pc, "audio");
-
-	if (audioTransceiver && audioTransceiver.sender) {
-		audioTransceiver.sender.replaceTrack(stream.getAudioTracks()[0]);
-	} else {
-		pc.addTrack(stream.getAudioTracks()[0], stream);
-	}
-	
-}
-
-updateExistingVideoStream = (config, stream) => {
-
-	const { myStream, pc } = config;
-	
-	myStream.addTrack(stream.getVideoTracks()[0]);
-	
-	const videoTransceiver = getTransceiver(pc, "video");
-
-	if (videoTransceiver && videoTransceiver.sender) {
-		videoTransceiver.sender.replaceTrack(stream.getVideoTracks()[0]);
-	} else {
-		pc.addTrack(stream.getVideoTracks()[0], stream);
-	}
-
-}
-
-addTracks = (stream, callbacks, config) => {
-		
-	stream.getTracks().forEach((track) => {
-		
-		if (track.kind === "audio") {
-			config.pc.addTrack(track, stream);
-		} else {
-			const maxBitrates = this.getMaxBitrates(callbacks.simulcastMaxBitrates);
-			config.pc.addTransceiver(track, {
-				direction: "sendrecv",
-				streams: [stream],
-				sendEncodings: [
-					{ rid: "h", active: true, maxBitrate: maxBitrates.high },
-					{ rid: "m", active: true, maxBitrate: maxBitrates.medium, scaleResolutionDownBy: 2 },
-					{ rid: "l", active: true, maxBitrate: maxBitrates.low, scaleResolutionDownBy: 4 }
-				]
-			});
-		}
-
-	});
-
-}
-
-const res1 = sdpTransform.parse(offer.sdp);
-
-createPeerConnection = () => {
-
-	const c : RTCConfiguration = {
-		"iceServers": this.iceServers,
-	};
-
-	c["sdpSemantics"] = "unified-plan";
-	
-	this.pc = new RTCPeerConnection(c);
-	
-	if (this.pc.getStats) {
-		this.volume = {
-			value : null,
-			timer : null
-		};
-		this.bitrate.value = "0 kbits/sec";
-	}
-
-	this.pc.oniceconnectionstatechange = (e) => {
-		
-		log('log')(this.id, `oniceconnectionstatechange`, e);
-
-	}
-
-	this.pc.onicecandidate = (event) => {
-		
-		if (!event.candidate) {
-			
-			this.iceDone = true;
-			
-			this.sendTrickleCandidate({"completed": true});
-
-		} else {
-			
-			const candidate = {
-				"candidate": event.candidate.candidate,
-				"sdpMid": event.candidate.sdpMid,
-				"sdpMLineIndex": event.candidate.sdpMLineIndex
-			};
-			
-			this.sendTrickleCandidate(candidate);
-				
-		}
-
-	}
-
-	this.pc.ontrack = (event) => {
-
-		if (!event.streams) {
-			return;
-		}
-
-		this.remoteStream = event.streams[0];
-
-		//if (this.onremotestream) {
-			//this.onremotestream(this.remoteStream);
-		//}
-
-		if (event.track.onended) {
-			return;
-		}
-
-		event.track.onended = (ev) => {
-			//if (this.remoteStream && this.onremotestream) {
-				//this.remoteStream.removeTrack(ev.target);
-				//this.onremotestream(this.remoteStream);
-			//}
-		};
-
-		event.track.onmute = event.track.onended;
-
-		event.track.onunmute = (ev) => {
-			//try {
-			//	this.remoteStream.addTrack(ev.target);
-			//	this.onremotestream(this.remoteStream);
-			//} catch(e) {
-				
-			//};
-		};
-
-	}
-	
-	this.pc.onnegotiationneeded = this.onNegotiationNeeded;
-	this.pc.onicecandidateerror = this.onIceCandidateError;
-	this.pc.onicegatheringstatechange = this.onIceGatheringStateChange;
-	this.pc.onsignalingstatechange = this.onSignalingStateChange;
-	this.pc.onstatsended = stats => {
-
-		log('log')(stats);
-		
-	};
-	
-}
-*/

@@ -21,10 +21,29 @@
 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 	OTHER DEALINGS IN THE SOFTWARE.
 */
-
 import { v1 as uuidv1 } from 'uuid';
 import { getTransceiver } from './utils';
-import { logger } from './logger';
+
+
+
+interface Logger {
+	enable: () => void,
+	disable: () => void,
+	success: (...args:any[]) => void,
+	info: (...args:any[]) => void,
+	error: (error:any) => void,
+	json: (...args:any[]) => void,
+	tag: (tag:string, type:`success` | `info` | `error`) => (...args:any[]) => void
+}
+
+
+
+interface JanusPublisherOptions {
+	transaction:(request:any) => Promise<any>,
+	room_id:string,
+	configuration:any,
+	logger:Logger
+}
 
 
 
@@ -33,7 +52,7 @@ class JanusPublisher extends EventTarget {
 	room_id: string
 	handle_id: number
 	ptype: "publisher"
-	transaction: any
+	transaction:(request:any) => Promise<any>
 	pc: RTCPeerConnection
 	stream: MediaStream
 	candidates: any[]
@@ -52,27 +71,34 @@ class JanusPublisher extends EventTarget {
 		tsbefore: any,
 		timer: any
 	}
-	
-	constructor(options) {
+	iceConnectionState: any
+	iceGatheringState: any
+	signalingState: any
+	statsInterval: any
+	stats: any
+	logger: Logger
+
+	constructor(options:JanusPublisherOptions) {
 
 		super();
 
-		this.id = uuidv1();
-
-	  	const { 
-			transaction, 
+		const { 
+			transaction,
 			room_id,
-			configuration
+			configuration,
+			logger
 		} = options;
 
+		this.ptype = "publisher";
+
+		this.id = uuidv1();
+		
 		this.transaction = transaction;
 
 		this.configuration = configuration;
 		
 		this.room_id = room_id;
-
-		this.ptype = "publisher";
-
+		
 		this.publishing = false;
 
 		this.volume = {
@@ -89,6 +115,8 @@ class JanusPublisher extends EventTarget {
 			timer: null
 		};
 
+		this.logger = logger;
+
 		this.createPeerConnection();
 
 	}
@@ -98,8 +126,10 @@ class JanusPublisher extends EventTarget {
 	public initialize = async () => {
 
 		await this.attach();
+
+		const options = {};
 		
-		const jsep = await this.createOffer();
+		const jsep = await this.createOffer(options);
 
 		const response = await this.joinandconfigure(jsep);
 
@@ -110,7 +140,11 @@ class JanusPublisher extends EventTarget {
 
 
 	public terminate = async () => {
-		
+
+		const event = new Event('terminated');
+
+		this.dispatchEvent(event);
+
 		if (this.publishing) {
 			await this.unpublish();
 		}
@@ -121,20 +155,42 @@ class JanusPublisher extends EventTarget {
 		}
 
 		if (this.pc) {
+			clearInterval(this.statsInterval);
 			this.pc.close();
 		}
 		
-		const event = new Event('terminated');
-
-		this.dispatchEvent(event);
-
 	}
 
 
 
-	private createPeerConnection = () => {
+	public renegotiate = async ({
+		audio,
+		video
+	}) => {
+		
+		const options = {
+			iceRestart : true
+		};
+		
+		const jsep = await this.createOffer(options);
 
-		//TODO this.pc.getStats
+		this.logger.json(jsep);
+		
+		const configured = await this.configure({
+			jsep,
+			audio,
+			video
+		});
+
+		this.logger.json(configured);
+
+		return configured;
+
+	}
+	
+
+
+	private createPeerConnection = () => {
 		
 		const configuration = {
 			"iceServers": [{
@@ -144,6 +200,22 @@ class JanusPublisher extends EventTarget {
 		};
 		
 		this.pc = new RTCPeerConnection(configuration);
+
+		this.statsInterval = setInterval(() => {
+
+			this.pc.getStats()
+			.then((stats) => {
+
+				this.stats = stats;
+
+			})
+			.catch((error) => {
+
+				this.logger.error(error);
+
+			});
+
+		}, 3000);
 
 		this.pc.onicecandidate = (event) => {
 			
@@ -167,39 +239,50 @@ class JanusPublisher extends EventTarget {
 
 		};
 		
-		this.pc.oniceconnectionstatechange = (event) => {
+		this.pc.oniceconnectionstatechange = (e) => {
 			
-			logger.info(`[publisher] oniceconnectionstatechange ${this.pc.iceConnectionState}`);
+			this.iceConnectionState = this.pc.iceConnectionState;
+
+			if (this.pc.iceConnectionState==="disconnected") {
+				const event = new Event("disconnected");
+				this.dispatchEvent(event);
+			}
+
+			this.logger.info(`[${this.ptype}] oniceconnectionstatechange ${this.pc.iceConnectionState}`);
 			
 		};
 		
 		this.pc.onnegotiationneeded = () => {
-
-			logger.info(`[publisher] onnegotiationneeded ${this.pc.signalingState}`);
+			
+			this.logger.info(`[${this.ptype}] onnegotiationneeded ${this.pc.signalingState}`);
 
 		};
 
 		this.pc.onicegatheringstatechange = e => {
 			
-			logger.info(`[publisher] onicegatheringstatechange ${this.pc.iceGatheringState}`);
+			this.iceGatheringState = this.pc.iceGatheringState;
+
+			this.logger.info(`[${this.ptype}] onicegatheringstatechange ${this.pc.iceGatheringState}`);
 
 		};
 		
 		this.pc.onsignalingstatechange = e => {
 			
-			logger.info(`[publisher] onicegatheringstatechange ${this.pc.signalingState}`);
+			this.signalingState = this.pc.signalingState;
+
+			this.logger.info(`[${this.ptype}] onicegatheringstatechange ${this.pc.signalingState}`);
 			
 		};
 
 		this.pc.onicecandidateerror = error => {
 		
-			logger.error(error);
+			this.logger.error(error);
 		
 		};
 		
 		this.pc.onstatsended = stats => {
 
-			logger.json(stats);
+			this.logger.json(stats);
 			
 		};
 		
@@ -232,7 +315,7 @@ class JanusPublisher extends EventTarget {
 
 
 
-	public createOffer = () => {
+	public createOffer = async(options) => {
 		
 		const media = {
 			audio: true,
@@ -256,45 +339,37 @@ class JanusPublisher extends EventTarget {
 			direction: "sendonly" 
 		};
 
-		return navigator.mediaDevices.getUserMedia(media)
-		.then((stream) => {
-			
-			this.stream = stream;
+		const stream = await navigator.mediaDevices.getUserMedia(media);
+		
+		this.stream = stream;
 
-			let tracks = stream.getTracks();
+		let tracks = stream.getTracks();
 
-			let videoTrack = tracks.find((t) => t.kind==="video");
+		let videoTrack = tracks.find((t) => t.kind==="video");
 
-			let audioTrack = tracks.find((t) => t.kind==="audio");
+		let audioTrack = tracks.find((t) => t.kind==="audio");
 			
-			let vt = getTransceiver(this.pc, "video");
+		let vt = getTransceiver(this.pc, "video");
 
-			let at = getTransceiver(this.pc, "audio");
+		let at = getTransceiver(this.pc, "audio");
 			
-			if (vt && at) {
-				at.direction = "sendonly";
-				vt.direction = "sendonly";
-			} else {
-				vt = this.pc.addTransceiver("video", videoOptions);
-				at = this.pc.addTransceiver("audio", audioOptions);
-			}
+		if (vt && at) {
+			at.direction = "sendonly";
+			vt.direction = "sendonly";
+		} else {
+			vt = this.pc.addTransceiver("video", videoOptions);
+			at = this.pc.addTransceiver("audio", audioOptions);
+		}
 			
-			vt.sender.replaceTrack(videoTrack);
+		vt.sender.replaceTrack(videoTrack);
+		
+		at.sender.replaceTrack(audioTrack);
 			
-			at.sender.replaceTrack(audioTrack);
-			
-			return this.pc.createOffer({
-				iceRestart: true
-			})
-			.then((offer) => {
-				
-				this.pc.setLocalDescription(offer);
-				
-				return offer;
-
-			});
-			
-		})
+		const offer = await this.pc.createOffer(options);
+		
+		this.pc.setLocalDescription(offer);
+		
+		return offer;
 		
 	}
 
@@ -328,7 +403,7 @@ class JanusPublisher extends EventTarget {
 			load: {
 				room_id: this.room_id,
 				handle_id: this.handle_id,
-				ptype: "publisher"
+				ptype: this.ptype
 			}
 		};
 
@@ -345,7 +420,7 @@ class JanusPublisher extends EventTarget {
 			load: {
 				room_id: this.room_id,
 				handle_id: this.handle_id,
-				ptype: "publisher"
+				ptype: this.ptype
 			}
 		};
 
@@ -425,7 +500,7 @@ class JanusPublisher extends EventTarget {
 				room_id: this.room_id,
 				handle_id: this.handle_id,
 				jsep,
-				ptype: "publisher"
+				ptype: this.ptype
 			}
 		};
 		

@@ -21,17 +21,29 @@
 	ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 	OTHER DEALINGS IN THE SOFTWARE.
 */
-
 import { v1 as uuidv1 } from 'uuid';
 import { getTransceiver } from './utils';
-import { logger } from './logger';
+
+
+
+interface Logger {
+	enable: () => void,
+	disable: () => void,
+	success: (...args:any[]) => void,
+	info: (...args:any[]) => void,
+	error: (error:any) => void,
+	json: (...args:any[]) => void,
+	tag: (tag:string, type:`success` | `info` | `error`) => (...args:any[]) => void
+}
+
+
 
 interface JanusSubscriberOptions {
 	transaction:any, 
 	room_id:string,
 	feed:string,
-	configuration?,
-	onTerminated:() => void
+	configuration:any,
+	logger:Logger
 }
 
 
@@ -59,9 +71,14 @@ class JanusSubscriber extends EventTarget {
 		tsbefore: any,
 		timer: any
 	}
-	onTerminated:() => void
+	joined: boolean
 	attached: boolean
-
+	iceConnectionState: any
+	iceGatheringState: any
+	signalingState: any
+	statsInterval: any
+	stats: any
+	logger: Logger
 
 	constructor(options:JanusSubscriberOptions) {
 
@@ -72,14 +89,12 @@ class JanusSubscriber extends EventTarget {
 			room_id,
 			feed,
 			configuration,
-			onTerminated
+			logger
 		} = options;
 
 		this.id = uuidv1();
 		
 		this.transaction = transaction;
-
-		this.onTerminated = onTerminated; 
 
 		this.feed = feed;
 
@@ -104,7 +119,9 @@ class JanusSubscriber extends EventTarget {
 			tsbefore: null,
 			timer: null
 		};
-		
+
+		this.logger = logger;
+
 		this.createPeerConnection();
 	  
 	}
@@ -126,30 +143,31 @@ class JanusSubscriber extends EventTarget {
 		return started;
 
 	}
-
+	
 
 
 	public terminate = async () => {
-	
+
+		const event = new Event('terminated');
+
+		this.dispatchEvent(event);
+
 		if (this.attached) {
 			await this.hangup();
 			await this.detach();
 		}
 
 		if (this.pc) {
+			clearInterval(this.statsInterval);
 			this.pc.close();
 		}
 		
-		this.onTerminated();
-
 	}
 
 	
 
 	public createPeerConnection = () => {
-
-		//TODO this.pc.getStats
-
+		
 		const configuration = {
 			"iceServers": [{
 				urls: "stun:stun.voip.eutelia.it:3478"
@@ -158,11 +176,23 @@ class JanusSubscriber extends EventTarget {
 		};
 		
 		this.pc = new RTCPeerConnection(configuration);
-		
-		this.pc.oniceconnectionstatechange = (event) => {
-			
-		};
 
+		this.statsInterval = setInterval(() => {
+
+			this.pc.getStats()
+			.then((stats) => {
+				
+				this.stats = stats;
+
+			})
+			.catch((error) => {
+
+				this.logger.error(error);
+
+			});
+
+		}, 3000);
+		
 		this.pc.onicecandidate = (event) => {
 			
 			if (!event.candidate) {
@@ -193,7 +223,7 @@ class JanusSubscriber extends EventTarget {
 			
 			const stream = event.streams[0];
 
-			this.stream = stream; //removeTrack, addTrack
+			this.stream = stream;
 			
 			stream.onaddtrack = (t) => {
 				
@@ -209,7 +239,7 @@ class JanusSubscriber extends EventTarget {
 			
 			event.track.onended = (e) => {
 				
-				logger.info('[subscriber] track onended');
+				this.logger.info('[subscriber] track onended');
 
 			};
 
@@ -229,33 +259,51 @@ class JanusSubscriber extends EventTarget {
 		
 		this.pc.onnegotiationneeded = () => {
 
-			logger.info(this.pc.signalingState);
+			this.iceConnectionState = this.pc.iceConnectionState;
 
+		};
+
+		this.pc.oniceconnectionstatechange = (event) => {
+			
+			this.iceConnectionState = this.pc.iceConnectionState;
+			
+			if (this.pc.iceConnectionState==="disconnected") {
+				const event = new Event("disconnected");
+				this.dispatchEvent(event);
+			}
+
+			this.logger.info(`oniceconnectionstatechange ${this.pc.iceConnectionState}`);
+			
 		};
 
 		this.pc.onicecandidateerror = error => {
 		
-			logger.error(error);
+			this.logger.error(error);
 		
 		};
 
 		this.pc.onicegatheringstatechange = e => {
 
-			logger.info(this.pc.iceGatheringState);
+			this.iceGatheringState = this.pc.iceGatheringState;
+
+			this.logger.info(this.pc.iceGatheringState);
 
 		};
 		
 		this.pc.onsignalingstatechange = e => {
 
-			logger.info(`onsignalingstatechange ${this.pc.signalingState}`);
+			this.signalingState = this.pc.signalingState;
+
+			this.logger.info(`onsignalingstatechange ${this.pc.signalingState}`);
 			
 		};
 		
 		this.pc.onstatsended = stats => {
 
-			logger.info(stats);
+			this.logger.info(stats);
 			
 		};
+
 	}
 
 
@@ -272,6 +320,7 @@ class JanusSubscriber extends EventTarget {
 		}
 		
 		return this.transaction(request);
+
 	}
 
 
@@ -279,49 +328,45 @@ class JanusSubscriber extends EventTarget {
 	public receiveTrickleCandidate = (candidate) : void => {
 
 		this.candidates.push(candidate);
+
 	}
 
 
 
-	public createAnswer = (jsep) => {
+	public createAnswer = async (jsep) => {
 		
-		return this.pc
-		.setRemoteDescription(jsep)
-		.then(() => {
-			
-			if (this.candidates) {
-				this.candidates.forEach((candidate) => {
-					if (candidate.completed || !candidate) {
-						this.pc.addIceCandidate(null);
-					} else {
-						this.pc.addIceCandidate(candidate);
-					}
-				});
-				this.candidates = [];
-			}
-			
-			let vt = getTransceiver(this.pc, "video");
-			let at = getTransceiver(this.pc, "audio");
-			
-			if (vt && at) {
-				at.direction = "recvonly";
-				vt.direction = "recvonly";
-			} else {
-				vt = this.pc.addTransceiver("video", { direction: "recvonly" });
-				at = this.pc.addTransceiver("audio", { direction: "recvonly" });
-			}
-			
-			return this.pc.createAnswer({
-				iceRestart: true
-			})
-			.then((answer) => {
-				
-				this.pc.setLocalDescription(answer);
-				
-				return answer;
+		await this.pc.setRemoteDescription(jsep);
 
+		if (this.candidates) {
+			this.candidates.forEach((candidate) => {
+				if (candidate.completed || !candidate) {
+					this.pc.addIceCandidate(null);
+				} else {
+					this.pc.addIceCandidate(candidate);
+				}
 			});
+			this.candidates = [];
+		}
+
+		let vt = getTransceiver(this.pc, "video");
+		let at = getTransceiver(this.pc, "audio");
+		
+		if (vt && at) {
+			at.direction = "recvonly";
+			vt.direction = "recvonly";
+		} else {
+			vt = this.pc.addTransceiver("video", { direction: "recvonly" });
+			at = this.pc.addTransceiver("audio", { direction: "recvonly" });
+		}
+		
+		const answer = await this.pc.createAnswer({
+			iceRestart: true
 		});
+
+		this.pc.setLocalDescription(answer);
+		
+		return answer;
+
 	}
 	
 
@@ -342,6 +387,7 @@ class JanusSubscriber extends EventTarget {
 		this.attached = true;
 
 		return result;
+
 	}
 
 
@@ -358,7 +404,46 @@ class JanusSubscriber extends EventTarget {
 			}
 		};
 
-		return this.transaction(request);
+		return this.transaction(request)
+		.then((response) => {
+
+			this.joined = true;
+
+			return response;
+
+		});
+
+	}
+
+
+
+	public configure = async (data) => {
+
+		const request : any = {
+			type: "configure",
+			load: {
+				room_id: this.room_id,
+				handle_id: this.handle_id,
+				ptype: this.ptype
+			}
+		};
+
+		if (data.jsep) {
+			request.load.jsep = data.jsep;
+		}
+
+		if (data.audio!==undefined) {
+			request.load.audio = data.audio;
+		}
+
+		if (data.video!==undefined) {
+			request.load.video = data.video;
+		}
+		
+		const configureResponse = await this.transaction(request);
+
+		return configureResponse;
+
 	}
 
 
@@ -375,6 +460,7 @@ class JanusSubscriber extends EventTarget {
 		};
 
 		return this.transaction(request);
+
 	}
 
 
@@ -435,15 +521,7 @@ class JanusSubscriber extends EventTarget {
 		return result;
 		
 	}
-
-
-
-	configure = ({ jsep }) => {
-
 	
-
-	}
-
 }
 
 
