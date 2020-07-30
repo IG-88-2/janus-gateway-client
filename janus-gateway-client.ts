@@ -431,7 +431,7 @@ export class JanusPublisher extends EventTarget {
 			video: true 
 		};
 
-		//TODO why send encoding crashes puppeteer ???  
+		//why - send encoding crashes puppeteer ???  
 		const videoOptions : any = {
 			direction: "sendonly",
 			/*
@@ -1200,8 +1200,9 @@ export class JanusClient {
 	server:string
 	room_id:string
 	ws:any
+	terminating:boolean
 	connected:boolean
-	connecting:boolean
+	initializing:boolean
 	publisher:JanusPublisher
 	subscribers:{ [id:string] : JanusSubscriber }
 	calls:{ [id:string] : (message:any) => void } 
@@ -1211,7 +1212,7 @@ export class JanusClient {
 	socketOptions:any
 	onSubscriber: (subscriber:JanusSubscriber) => void
 	onPublisher: (publisher:JanusPublisher) => void
-	notifyConnected: () => void
+	notifyConnected: (error?:any) => void
 	onError: (error:any) => void
 	getId: () => string
 	WebSocket: any
@@ -1239,7 +1240,11 @@ export class JanusClient {
 
 		this.ws = null;
 
+		this.initializing = false;
+
 		this.connected = false;
+
+		this.terminating = false;
 
 		this.subscribers = {};
 
@@ -1269,7 +1274,21 @@ export class JanusClient {
 
 	public initialize = () : Promise<void> => {
 		
-		this.connecting = true;
+		if (this.terminating) {
+			throw new Error('termination in progress...');
+		}
+
+		if (this.connected) {
+			throw new Error('already initialized...');
+		}
+
+		if (this.initializing) {
+			throw new Error('initialization in progress...');
+		}
+		
+		this.logger.success(`initialize... ${this.server}`);
+		
+		this.initializing = true;
 
 		this.ws = new this.WebSocket(
 			this.server, 
@@ -1295,11 +1314,165 @@ export class JanusClient {
 
 
 
+	public terminate = async () => {
+		
+		if (!this.initializing && !this.connected) {
+			throw new Error('already terminated...');
+		}
+
+		if (this.terminating) {
+			throw new Error('termination in progress...');
+		}
+
+		this.terminating = true;
+		
+		await this.cleanup();
+
+		this.logger.info(`terminate: remove event listeners...`);
+		
+		this.ws.removeEventListener('message', this.onMessage);
+
+		this.ws.removeEventListener('open', this.onOpen);
+		
+        this.ws.removeEventListener('close', this.onClose);
+		
+		this.ws.removeEventListener('error', this.onError);
+
+		if (this.notifyConnected) {
+			this.notifyConnected({
+				cancel: true
+			});
+			delete this.notifyConnected;
+		}
+		
+		this.logger.info(`terminate: close connection...`);
+
+		this.ws.close();
+
+		this.onClose();
+
+		this.ws = undefined;
+
+		this.terminating = false;
+
+	}
+
+
+
+	private onClose = () => {
+
+		this.logger.info(`connection closed...`);
+
+		this.connected = false;
+
+		this.initializing = false;
+
+		clearInterval(this.keepAlive);
+
+		this.keepAlive = undefined;
+		
+	}
+
+
+
+	public leave = async () => {
+		
+		if (this.terminating) {
+			throw new Error('termination in progress...');
+		}
+		
+		await this.cleanup();
+
+	}
+
+
+
+	private cleanup = async () => {
+		
+		if (this.publisher) {
+			this.logger.info(`terminate publisher ${this.publisher.handle_id}...`);
+			try {
+				await this.publisher.terminate();
+				this.publisher.transaction = (...args) => Promise.resolve();
+				delete this.publisher;
+			} catch(error) {
+				this.onError(error);
+			}
+		}
+		
+		for(const id in this.subscribers) {
+			const subscriber = this.subscribers[id];
+			const event = new Event('leaving');
+			subscriber.dispatchEvent(event);
+			this.logger.info(`terminate subscriber ${subscriber.handle_id}...`);
+			try {
+				await subscriber.terminate();
+				subscriber.transaction = (...args) => Promise.resolve();
+				delete this.subscribers[subscriber.feed];
+			} catch(error) {
+				this.onError(error);
+			}
+		}
+
+		this.subscribers = {};
+
+	}
+
+
+
+	public join = async (room_id:string) : Promise<void> => {
+		
+		//TODO conditions
+
+		this.room_id = room_id;
+
+		if (this.publisher) {
+			try {
+				await this.publisher.terminate();
+				this.publisher.transaction = (...args) => Promise.resolve();
+				delete this.publisher;
+			} catch(error){
+				this.onError(error);
+			}
+		}
+		
+		try {
+
+			this.publisher = new JanusPublisher({
+				room_id: this.room_id,
+				transaction: this.transaction,
+				logger: this.logger,
+				configuration: {},
+				getId: this.getId
+			});
+
+			const publishers = await this.publisher.initialize();
+
+			this.onPublisher(this.publisher);
+
+			if (!publishers || !Array.isArray(publishers)) {
+				const error = new Error(`join - publishers incorrect format...`);
+				this.onError(error);
+				return;
+			}
+
+			this.onPublishers(publishers);
+
+		} catch(error) {
+
+			this.onError(error);
+
+		}
+		
+	}
+
+
+
 	private onOpen = () => {
 
 		this.logger.success(`connection established...`);
 		
-		this.connecting = false;
+		this.initializing = false;
 
 		this.connected = true;
 
@@ -1319,22 +1492,6 @@ export class JanusClient {
 
 		}, this.keepAliveInterval);
 
-	}
-
-
-
-	private onClose = () => {
-
-		this.logger.info(`connection closed...`);
-
-		this.connected = false;
-
-		clearInterval(this.keepAlive);
-
-		this.keepAlive = undefined;
-
-		this.cleanup();
-		
 	}
 
 
@@ -1545,6 +1702,7 @@ export class JanusClient {
 				subscriber.dispatchEvent(event);
 				try {
 					await subscriber.terminate();
+					subscriber.transaction = (...args) => Promise.resolve();
 					delete this.subscribers[subscriber.feed];
 				} catch(error) {
 					this.onError(error);
@@ -1570,112 +1728,6 @@ export class JanusClient {
 				}
 			}
 		}
-
-	}
-
-
-
-	private cleanup = async () => {
-
-		if (this.publisher) {
-			this.logger.info(`terminate publisher ${this.publisher.handle_id}...`);
-			try {
-				await this.publisher.terminate();
-			} catch(error) {
-				this.onError(error);
-			}
-		}
-		
-		for(const id in this.subscribers) {
-			const subscriber = this.subscribers[id];
-			const event = new Event('leaving');
-			subscriber.dispatchEvent(event);
-			this.logger.info(`terminate subscriber ${subscriber.handle_id}...`);
-			try {
-				await subscriber.terminate();
-				delete this.subscribers[subscriber.feed];
-			} catch(error) {
-				this.onError(error);
-			}
-		}
-
-		this.subscribers = {};
-
-	}
-
-
-
-	public terminate = async () => {
-		
-		this.logger.info(`terminate: remove event listeners...`);
-		
-		this.ws.removeEventListener('message', this.onMessage);
-
-		this.ws.removeEventListener('open', this.onOpen);
-		
-        this.ws.removeEventListener('close', this.onClose);
-		
-		this.ws.removeEventListener('error', this.onError);
-		
-		this.logger.info(`terminate: close connection...`);
-
-		this.ws.close();
-
-		this.onClose();
-
-		this.ws = undefined;
-
-	}
-
-
-
-	public join = async (room_id:string) : Promise<void> => {
-		
-		this.room_id = room_id;
-
-		if (this.publisher) {
-			try {
-				await this.publisher.terminate();
-			} catch(error){
-				this.onError(error);
-			}
-		}
-		
-		try {
-
-			this.publisher = new JanusPublisher({
-				room_id: this.room_id,
-				transaction: this.transaction,
-				logger: this.logger,
-				configuration: {},
-				getId: this.getId
-			});
-
-			const publishers = await this.publisher.initialize();
-
-			this.onPublisher(this.publisher);
-
-			if (!publishers || !Array.isArray(publishers)) {
-				const error = new Error(`join - publishers incorrect format...`);
-				this.onError(error);
-				return;
-			}
-
-			this.onPublishers(publishers);
-
-		} catch(error) {
-
-			this.onError(error);
-
-		}
-		
-	}
-
-
-
-	public leave = async () => {
-		
-		await this.cleanup();
 
 	}
 
@@ -1739,17 +1791,22 @@ export class JanusClient {
 
 	private transaction = async (request) => {
 
+		//TODO review
 		if (!this.connected) {
 			this.logger.error(`transaction - not connected...`);
-			if (this.connecting) {
+			this.logger.json(request);
+			if (this.initializing) {
 				this.logger.info(`transaction - wait until connected...`);
 				await waitUntil(() => Promise.resolve(this.connected), 30000, 500);
 			} else {
-				this.logger.info(`transaction - initialize...`);
-				await this.initialize();
+				const error = new Error(`client should be initialized before you can make transaction`);
+				this.onError(error);
+				return;
+				//this.logger.info(`transaction - initialize...`);
+				//await this.initialize();
 			}
 		}
-
+		
 		const timeout = this.transactionTimeout;
 
 		const id = this.getId();
@@ -1768,7 +1825,7 @@ export class JanusClient {
 		p = new Promise((resolve, reject) => {
 			
 			let t = setTimeout(() => {
-				if (!this.connected && !this.connecting) {
+				if (!this.connected && !this.initializing) {
 					this.initialize();
 				}
 				delete this.calls[id];

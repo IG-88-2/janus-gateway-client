@@ -6694,7 +6694,7 @@
                     audio: true,
                     video: true
                 };
-                //TODO why send encoding crashes puppeteer ???  
+                //why - send encoding crashes puppeteer ???  
                 const videoOptions = {
                     direction: "sendonly",
                 };
@@ -7165,7 +7165,17 @@
     class JanusClient {
         constructor(options) {
             this.initialize = () => {
-                this.connecting = true;
+                if (this.terminating) {
+                    throw new Error('termination in progress...');
+                }
+                if (this.connected) {
+                    throw new Error('already initialized...');
+                }
+                if (this.initializing) {
+                    throw new Error('initialization in progress...');
+                }
+                this.logger.success(`initialize... ${this.server}`);
+                this.initializing = true;
                 this.ws = new this.WebSocket(this.server, [], this.socketOptions);
                 this.ws.addEventListener('message', this.onMessage);
                 this.ws.addEventListener('open', this.onOpen);
@@ -7175,9 +7185,110 @@
                     this.notifyConnected = () => resolve();
                 });
             };
+            this.terminate = () => __awaiter(this, void 0, void 0, function* () {
+                if (!this.initializing && !this.connected) {
+                    throw new Error('already terminated...');
+                }
+                if (this.terminating) {
+                    throw new Error('termination in progress...');
+                }
+                this.terminating = true;
+                yield this.cleanup();
+                this.logger.info(`terminate: remove event listeners...`);
+                this.ws.removeEventListener('message', this.onMessage);
+                this.ws.removeEventListener('open', this.onOpen);
+                this.ws.removeEventListener('close', this.onClose);
+                this.ws.removeEventListener('error', this.onError);
+                if (this.notifyConnected) {
+                    this.notifyConnected({
+                        cancel: true
+                    });
+                    delete this.notifyConnected;
+                }
+                this.logger.info(`terminate: close connection...`);
+                this.ws.close();
+                this.onClose();
+                this.ws = undefined;
+                this.terminating = false;
+            });
+            this.onClose = () => {
+                this.logger.info(`connection closed...`);
+                this.connected = false;
+                this.initializing = false;
+                clearInterval(this.keepAlive);
+                this.keepAlive = undefined;
+            };
+            this.leave = () => __awaiter(this, void 0, void 0, function* () {
+                if (this.terminating) {
+                    throw new Error('termination in progress...');
+                }
+                yield this.cleanup();
+            });
+            this.cleanup = () => __awaiter(this, void 0, void 0, function* () {
+                if (this.publisher) {
+                    this.logger.info(`terminate publisher ${this.publisher.handle_id}...`);
+                    try {
+                        yield this.publisher.terminate();
+                        this.publisher.transaction = (...args) => Promise.resolve();
+                        delete this.publisher;
+                    }
+                    catch (error) {
+                        this.onError(error);
+                    }
+                }
+                for (const id in this.subscribers) {
+                    const subscriber = this.subscribers[id];
+                    const event = new Event('leaving');
+                    subscriber.dispatchEvent(event);
+                    this.logger.info(`terminate subscriber ${subscriber.handle_id}...`);
+                    try {
+                        yield subscriber.terminate();
+                        subscriber.transaction = (...args) => Promise.resolve();
+                        delete this.subscribers[subscriber.feed];
+                    }
+                    catch (error) {
+                        this.onError(error);
+                    }
+                }
+                this.subscribers = {};
+            });
+            this.join = (room_id) => __awaiter(this, void 0, void 0, function* () {
+                //TODO conditions
+                this.room_id = room_id;
+                if (this.publisher) {
+                    try {
+                        yield this.publisher.terminate();
+                        this.publisher.transaction = (...args) => Promise.resolve();
+                        delete this.publisher;
+                    }
+                    catch (error) {
+                        this.onError(error);
+                    }
+                }
+                try {
+                    this.publisher = new JanusPublisher({
+                        room_id: this.room_id,
+                        transaction: this.transaction,
+                        logger: this.logger,
+                        configuration: {},
+                        getId: this.getId
+                    });
+                    const publishers = yield this.publisher.initialize();
+                    this.onPublisher(this.publisher);
+                    if (!publishers || !Array.isArray(publishers)) {
+                        const error = new Error(`join - publishers incorrect format...`);
+                        this.onError(error);
+                        return;
+                    }
+                    this.onPublishers(publishers);
+                }
+                catch (error) {
+                    this.onError(error);
+                }
+            });
             this.onOpen = () => {
                 this.logger.success(`connection established...`);
-                this.connecting = false;
+                this.initializing = false;
                 this.connected = true;
                 if (this.notifyConnected) {
                     this.notifyConnected();
@@ -7189,13 +7300,6 @@
                         this.onError(error);
                     });
                 }, this.keepAliveInterval);
-            };
-            this.onClose = () => {
-                this.logger.info(`connection closed...`);
-                this.connected = false;
-                clearInterval(this.keepAlive);
-                this.keepAlive = undefined;
-                this.cleanup();
             };
             this.onMessage = (response) => {
                 let message = null;
@@ -7339,6 +7443,7 @@
                         subscriber.dispatchEvent(event);
                         try {
                             yield subscriber.terminate();
+                            subscriber.transaction = (...args) => Promise.resolve();
                             delete this.subscribers[subscriber.feed];
                         }
                         catch (error) {
@@ -7357,76 +7462,6 @@
                     }
                 }
             };
-            this.cleanup = () => __awaiter(this, void 0, void 0, function* () {
-                if (this.publisher) {
-                    this.logger.info(`terminate publisher ${this.publisher.handle_id}...`);
-                    try {
-                        yield this.publisher.terminate();
-                    }
-                    catch (error) {
-                        this.onError(error);
-                    }
-                }
-                for (const id in this.subscribers) {
-                    const subscriber = this.subscribers[id];
-                    const event = new Event('leaving');
-                    subscriber.dispatchEvent(event);
-                    this.logger.info(`terminate subscriber ${subscriber.handle_id}...`);
-                    try {
-                        yield subscriber.terminate();
-                        delete this.subscribers[subscriber.feed];
-                    }
-                    catch (error) {
-                        this.onError(error);
-                    }
-                }
-                this.subscribers = {};
-            });
-            this.terminate = () => __awaiter(this, void 0, void 0, function* () {
-                this.logger.info(`terminate: remove event listeners...`);
-                this.ws.removeEventListener('message', this.onMessage);
-                this.ws.removeEventListener('open', this.onOpen);
-                this.ws.removeEventListener('close', this.onClose);
-                this.ws.removeEventListener('error', this.onError);
-                this.logger.info(`terminate: close connection...`);
-                this.ws.close();
-                this.onClose();
-                this.ws = undefined;
-            });
-            this.join = (room_id) => __awaiter(this, void 0, void 0, function* () {
-                this.room_id = room_id;
-                if (this.publisher) {
-                    try {
-                        yield this.publisher.terminate();
-                    }
-                    catch (error) {
-                        this.onError(error);
-                    }
-                }
-                try {
-                    this.publisher = new JanusPublisher({
-                        room_id: this.room_id,
-                        transaction: this.transaction,
-                        logger: this.logger,
-                        configuration: {},
-                        getId: this.getId
-                    });
-                    const publishers = yield this.publisher.initialize();
-                    this.onPublisher(this.publisher);
-                    if (!publishers || !Array.isArray(publishers)) {
-                        const error = new Error(`join - publishers incorrect format...`);
-                        this.onError(error);
-                        return;
-                    }
-                    this.onPublishers(publishers);
-                }
-                catch (error) {
-                    this.onError(error);
-                }
-            });
-            this.leave = () => __awaiter(this, void 0, void 0, function* () {
-                yield this.cleanup();
-            });
             this.mute = () => __awaiter(this, void 0, void 0, function* () {
                 if (!this.publisher) {
                     throw new Error('mute - publisher is undefined...');
@@ -7460,15 +7495,20 @@
                 });
             });
             this.transaction = (request) => __awaiter(this, void 0, void 0, function* () {
+                //TODO review
                 if (!this.connected) {
                     this.logger.error(`transaction - not connected...`);
-                    if (this.connecting) {
+                    this.logger.json(request);
+                    if (this.initializing) {
                         this.logger.info(`transaction - wait until connected...`);
                         yield waitUntil(() => Promise.resolve(this.connected), 30000, 500);
                     }
                     else {
-                        this.logger.info(`transaction - initialize...`);
-                        yield this.initialize();
+                        const error = new Error(`client should be initialized before you can make transaction`);
+                        this.onError(error);
+                        return;
+                        //this.logger.info(`transaction - initialize...`);
+                        //await this.initialize();
                     }
                 }
                 const timeout = this.transactionTimeout;
@@ -7484,7 +7524,7 @@
                 }
                 p = new Promise((resolve, reject) => {
                     let t = setTimeout(() => {
-                        if (!this.connected && !this.connecting) {
+                        if (!this.connected && !this.initializing) {
                             this.initialize();
                         }
                         delete this.calls[id];
@@ -7527,7 +7567,9 @@
             this.logger = logger;
             this.server = server;
             this.ws = null;
+            this.initializing = false;
             this.connected = false;
+            this.terminating = false;
             this.subscribers = {};
             this.calls = {};
             this.onError = onError;

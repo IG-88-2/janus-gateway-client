@@ -143,8 +143,9 @@ export declare class JanusClient {
     server: string;
     room_id: string;
     ws: any;
+    terminating: boolean;
     connected: boolean;
-    connecting: boolean;
+    initializing: boolean;
     publisher: JanusPublisher;
     subscribers: {
         [id: string]: JanusSubscriber;
@@ -158,15 +159,19 @@ export declare class JanusClient {
     socketOptions: any;
     onSubscriber: (subscriber: JanusSubscriber) => void;
     onPublisher: (publisher: JanusPublisher) => void;
-    notifyConnected: () => void;
+    notifyConnected: (error?: any) => void;
     onError: (error: any) => void;
     getId: () => string;
     WebSocket: any;
     logger: any;
     constructor(options: JanusOptions);
     initialize: () => Promise<void>;
-    private onOpen;
+    terminate: () => Promise<void>;
     private onClose;
+    leave: () => Promise<void>;
+    private cleanup;
+    join: (room_id: string) => Promise<void>;
+    private onOpen;
     private onMessage;
     private onEvent;
     private onTrickle;
@@ -174,10 +179,6 @@ export declare class JanusClient {
     private onMedia;
     private onLeaving;
     private onInternal;
-    private cleanup;
-    terminate: () => Promise<void>;
-    join: (room_id: string) => Promise<void>;
-    leave: () => Promise<void>;
     mute: () => Promise<any>;
     unmute: () => Promise<any>;
     pause: () => Promise<any>;
