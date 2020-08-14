@@ -1,0 +1,28 @@
+{
+  "name": "janus-gateway-client",
+  "version": "0.0.2",
+  "description": "Janus Gateway Client",
+  "author": "Anatoly Strashkevich",
+  "copyright": "",
+  "repository": "https://github.com/IG-88-2/janus-gateway-client",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "browser": "dist/index.js",
+  "scripts": {
+    "build": "rollup -c rollup.config.ts"
+  },
+  "devDependencies": {
+    "rollup": "^2.23.0",
+    "rollup-plugin-commonjs": "^10.1.0",
+    "rollup-plugin-copy": "^3.3.0",
+    "rollup-plugin-json": "^4.0.0",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "rollup-plugin-sourcemaps": "^0.6.2",
+    "rollup-plugin-typescript2": "^0.27.1",
+    "ts-loader": "8.0.1",
+    "typescript": "^3.9.7"
+  },
+  "dependencies": {
+    "@babel/polyfill": "^7.10.4"
+  }
+}
