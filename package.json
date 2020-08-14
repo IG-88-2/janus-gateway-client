@@ -1,6 +1,6 @@
 {
   "name": "janus-gateway-client",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Janus Gateway Client",
   "author": "Anatoly Strashkevich",
   "copyright": "",
@@ -9,7 +9,8 @@
   "module": "dist/index.esm.js",
   "browser": "dist/index.js",
   "scripts": {
-    "build": "rollup -c rollup.config.ts"
+    "build": "rollup -c rollup.config.ts",
+    "publish": "cd dist & npm publish"
   },
   "devDependencies": {
     "rollup": "^2.23.0",
