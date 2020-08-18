@@ -159,7 +159,7 @@ const waitUntil = async (f : (t:number) => Promise<boolean>, timeout:number, def
 
 
 
-export class JanusPublisher extends EventTarget {
+class JanusPublisher extends EventTarget {
 	id: string
 	room_id: string
 	handle_id: number
@@ -721,7 +721,7 @@ export class JanusPublisher extends EventTarget {
 
 
 
-export class JanusSubscriber extends EventTarget {
+class JanusSubscriber extends EventTarget {
 	id: string
 	room_id: string
 	handle_id: number
@@ -1189,7 +1189,7 @@ export class JanusSubscriber extends EventTarget {
 
 
 
-export class JanusClient {
+class JanusClient {
 	server:string
 	room_id:string
 	ws:any
@@ -1897,3 +1897,9 @@ export class JanusClient {
 	}
 	
 }
+
+export {
+	JanusClient, 
+	JanusPublisher, 
+	JanusSubscriber 
+};
