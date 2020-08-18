@@ -1,12 +1,10 @@
 {
   "name": "janus-gateway-client",
-  "version": "0.0.34",
+  "version": "0.0.35",
   "description": "Janus Gateway Client",
   "author": "Anatoly Strashkevich",
   "repository": "https://github.com/IG-88-2/janus-gateway-client",
-  "main": "./index.cjs.js",
-  "module": "./index.esm.js",
-  "browser": "./index.js",
+  "main": "./index.js",
   "types": "./janus-gateway-client.d.ts",
   "scripts": {
     "build": "rollup -c rollup.config.ts"
