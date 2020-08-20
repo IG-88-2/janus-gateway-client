@@ -1305,7 +1305,7 @@ class JanusClient {
 
 		this.ws.addEventListener('message', this.onMessage);
 
-		this.ws.addEventListener('open', this.onOpen);
+		//this.ws.addEventListener('open', this.onOpen); ???
 		
         this.ws.addEventListener('close', this.onClose);
 		
@@ -1505,7 +1505,12 @@ class JanusClient {
 
 
 	private onMessage = (response:MessageEvent) => {
-			
+		
+		if (response.data==='connected') {
+			this.onOpen();
+			return;
+		}
+
 		let message = null;
 
 		try {
