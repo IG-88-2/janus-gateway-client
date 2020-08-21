@@ -1706,20 +1706,20 @@ class JanusClient {
 			this.onError(error);
 			return;
 		}
-
+		
 		const event = new Event('leaving');
 
 		for(const id in this.subscribers) {
 			const subscriber = this.subscribers[id];
 			if (subscriber.feed==leaving) {
-				subscriber.dispatchEvent(event);
+				delete this.subscribers[subscriber.feed];
+				subscriber.transaction = (...args) => Promise.resolve();
 				try {
 					await subscriber.terminate();
-					subscriber.transaction = (...args) => Promise.resolve();
-					delete this.subscribers[subscriber.feed];
 				} catch(error) {
 					this.onError(error);
 				}
+				subscriber.dispatchEvent(event);
 			}
 		}
 
