@@ -1,6 +1,6 @@
 {
   "name": "janus-gateway-client",
-  "version": "0.0.36",
+  "version": "0.0.37",
   "description": "Janus Gateway Client",
   "author": "Anatoly Strashkevich",
   "repository": "https://github.com/IG-88-2/janus-gateway-client",
