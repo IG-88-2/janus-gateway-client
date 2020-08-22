@@ -41,7 +41,6 @@ interface JanusOptions {
 	WebSocket: any,
 	subscriberRtcConfiguration: any,
 	publisherRtcConfiguration: any,
-	mediaConstraints: MediaStreamConstraints,
 	transactionTimeout: number,
 	keepAliveInterval: number,
 	logger: {
@@ -1208,7 +1207,6 @@ class JanusClient {
 	notifyConnected: (error?:any) => void
 	onError: (error:any) => void
 	generateId: () => string
-	mediaConstraints: MediaStreamConstraints
 	subscriberRtcConfiguration: any
 	publisherRtcConfiguration: any
 	WebSocket: any
@@ -1226,7 +1224,6 @@ class JanusClient {
 			server,
 			subscriberRtcConfiguration,
 			publisherRtcConfiguration,
-			mediaConstraints,
 			transactionTimeout,
 			keepAliveInterval
 		} = options;
@@ -1254,8 +1251,6 @@ class JanusClient {
 		this.subscriberRtcConfiguration = subscriberRtcConfiguration;
 
 		this.publisherRtcConfiguration = publisherRtcConfiguration;
-
-		this.mediaConstraints = mediaConstraints;
 
 		this.onError = onError;
 
@@ -1428,7 +1423,8 @@ class JanusClient {
 
 
 	public join = async (
-		room_id:string
+		room_id:string,
+		mediaConstraints?: MediaStreamConstraints
 	) : Promise<void> => {
 		
 		this.room_id = room_id;
@@ -1450,7 +1446,7 @@ class JanusClient {
 				transaction: this.transaction,
 				generateId: this.generateId,
 				logger: this.logger,
-				mediaConstraints: this.mediaConstraints,
+				mediaConstraints,
 				rtcConfiguration: this.publisherRtcConfiguration
 			});
 
