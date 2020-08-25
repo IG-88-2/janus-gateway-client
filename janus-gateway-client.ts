@@ -22,6 +22,9 @@
 	OTHER DEALINGS IN THE SOFTWARE.
 */
 import "@babel/polyfill";
+const uuidv1 = require('uuid').v1;
+
+
 
 interface Participant {
 	id: string,
@@ -37,12 +40,12 @@ interface JanusOptions {
 	onSubscriber: (subscriber:JanusSubscriber) => void,
 	onPublisher: (publisher:JanusPublisher) => void
 	onError: (error:any) => void,
-	generateId:() => string,
 	WebSocket: any,
 	subscriberRtcConfiguration: any,
 	publisherRtcConfiguration: any,
 	transactionTimeout: number,
 	keepAliveInterval: number,
+	user_id:string,
 	logger: {
 		enable: () => void,
 		disable: () => void,
@@ -58,10 +61,10 @@ interface JanusOptions {
 
 interface JanusPublisherOptions {
 	transaction:(request:any) => Promise<any>,
-	generateId:() => string,
 	rtcConfiguration:any,
 	mediaConstraints: MediaStreamConstraints,
 	room_id:string,
+	user_id:string,
 	logger:Logger
 }
 
@@ -69,7 +72,6 @@ interface JanusPublisherOptions {
 
 interface JanusSubscriberOptions {
 	transaction:(request:any) => Promise<any>,
-	generateId:() => string,
 	rtcConfiguration:any,
 	room_id:string,
 	feed:string,
@@ -197,10 +199,10 @@ class JanusPublisher extends EventTarget {
 		const { 
 			transaction,
 			room_id,
+			user_id,
 			rtcConfiguration,
 			mediaConstraints,
-			logger,
-			generateId
+			logger
 		} = options;
 
 		this.ptype = "publisher";
@@ -209,7 +211,7 @@ class JanusPublisher extends EventTarget {
 
 		this.mediaConstraints = mediaConstraints;
 
-		this.id = generateId();
+		this.id = user_id;
 		
 		this.transaction = transaction;
 		
@@ -513,6 +515,7 @@ class JanusPublisher extends EventTarget {
 		const request = {
 			type: "join",
 			load: {
+				id: this.id,
 				room_id: this.room_id,
 				handle_id: this.handle_id,
 				ptype: this.ptype
@@ -605,14 +608,15 @@ class JanusPublisher extends EventTarget {
 
 
 	public joinandconfigure = async (jsep) => {
-
+		
 		const request = {
 			type: "joinandconfigure",
 			load: {
+				id: this.id,
 				room_id: this.room_id,
 				handle_id: this.handle_id,
-				jsep,
-				ptype: this.ptype
+				ptype: this.ptype,
+				jsep
 			}
 		};
 		
@@ -761,15 +765,14 @@ class JanusSubscriber extends EventTarget {
 			room_id,
 			feed,
 			rtcConfiguration,
-			logger,
-			generateId
+			logger
 		} = options;
 
-		this.id = generateId();
+		this.id = feed;
+
+		this.feed = feed;
 		
 		this.transaction = transaction;
-
-		this.feed = feed; 
 		
 		this.room_id = room_id;
 
@@ -1206,11 +1209,11 @@ class JanusClient {
 	onPublisher: (publisher:JanusPublisher) => void
 	notifyConnected: (error?:any) => void
 	onError: (error:any) => void
-	generateId: () => string
 	subscriberRtcConfiguration: any
 	publisherRtcConfiguration: any
 	WebSocket: any
 	logger: any
+	user_id:string
 	
 	constructor(options:JanusOptions) {
 
@@ -1218,18 +1221,18 @@ class JanusClient {
 			onSubscriber,
 			onPublisher,
 			onError,
-			generateId,
 			WebSocket,
 			logger,
 			server,
 			subscriberRtcConfiguration,
 			publisherRtcConfiguration,
 			transactionTimeout,
-			keepAliveInterval
+			keepAliveInterval,
+			user_id
 		} = options;
-
-		this.generateId = generateId;
 		
+		this.user_id = user_id;
+
 		this.WebSocket = WebSocket;
 
 		this.logger = logger;
@@ -1443,8 +1446,8 @@ class JanusClient {
 
 			this.publisher = new JanusPublisher({
 				room_id: this.room_id,
+				user_id: this.user_id,
 				transaction: this.transaction,
-				generateId: this.generateId,
 				logger: this.logger,
 				mediaConstraints,
 				rtcConfiguration: this.publisherRtcConfiguration
@@ -1624,11 +1627,10 @@ class JanusClient {
 			}
 
 			const subscriber = new JanusSubscriber({
-				transaction: this.transaction, 
+				transaction: this.transaction,
 				room_id: this.room_id,
 				feed,
 				logger: this.logger,
-				generateId: this.generateId,
 				rtcConfiguration: this.subscriberRtcConfiguration
 			});
 
@@ -1818,7 +1820,7 @@ class JanusClient {
 		
 		const timeout = this.transactionTimeout;
 
-		const id = this.generateId();
+		const id = uuidv1();
 
 		request.transaction = id;
 		
