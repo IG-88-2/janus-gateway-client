@@ -261,6 +261,18 @@ class JanusPublisher extends EventTarget {
 
 		const event = new Event('terminated');
 
+		if (this.pc) {
+			clearInterval(this.statsInterval);
+			this.pc.close();
+		}
+
+		if (this.stream) {
+			const tracks = this.stream.getTracks();
+			tracks.forEach((track) => {
+				track.stop();
+			});
+		}
+
 		this.dispatchEvent(event);
 
 		if (this.publishing) {
@@ -270,18 +282,6 @@ class JanusPublisher extends EventTarget {
 		if (this.attached) {
 			await this.hangup();
 			await this.detach();
-		}
-
-		if (this.pc) {
-			clearInterval(this.statsInterval);
-			this.pc.close();
-		}
-
-		if (this.stream) {
-			const tracks = this.stream.getTracks()
-			tracks.forEach((track) => {
-				track.stop();
-			});
 		}
 		
 	}
@@ -475,9 +475,9 @@ class JanusPublisher extends EventTarget {
 			at = this.pc.addTransceiver("audio", audioOptions);
 		}
 			
-		vt.sender.replaceTrack(videoTrack);
+		await vt.sender.replaceTrack(videoTrack);
 		
-		at.sender.replaceTrack(audioTrack);
+		await at.sender.replaceTrack(audioTrack);
 			
 		const offer = await this.pc.createOffer({});
 		
@@ -826,14 +826,14 @@ class JanusSubscriber extends EventTarget {
 
 		this.dispatchEvent(event);
 
-		if (this.attached) {
-			await this.hangup();
-			await this.detach();
-		}
-
 		if (this.pc) {
 			clearInterval(this.statsInterval);
 			this.pc.close();
+		}
+
+		if (this.attached) {
+			await this.hangup();
+			await this.detach();
 		}
 		
 	}
@@ -1359,6 +1359,38 @@ class JanusClient {
 		this.ws = undefined;
 
 		this.terminating = false;
+
+	}
+
+
+
+	public replaceVideoTrack = async (videoTrack) => {
+
+		//TODO configure
+		videoTrack.enabled = true;
+
+		if (!this.publisher || !this.publisher.pc) {
+			return;
+		}
+		
+		let vt = getTransceiver(this.publisher.pc, "video");
+
+		if (!vt) {
+			return;
+		}
+
+		vt.sender.replaceTrack(videoTrack)
+		.then((r) => {
+
+			console.log('replace track', r);
+
+		})
+		.catch((error) => {
+
+			console.log('replace track error', error);
+
+		});
+		
 
 	}
 
