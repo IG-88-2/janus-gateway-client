@@ -61,6 +61,7 @@ interface JanusOptions {
 
 interface JanusPublisherOptions {
 	transaction:(request:any) => Promise<any>,
+	onError: (error:any) => void,
 	rtcConfiguration:any,
 	mediaConstraints: MediaStreamConstraints,
 	room_id:string,
@@ -191,6 +192,7 @@ class JanusPublisher extends EventTarget {
 	rtcConfiguration: any
 	mediaConstraints: any
 	logger: Logger
+	onError: any
 
 	constructor(options:JanusPublisherOptions) {
 
@@ -202,7 +204,8 @@ class JanusPublisher extends EventTarget {
 			user_id,
 			rtcConfiguration,
 			mediaConstraints,
-			logger
+			logger,
+			onError
 		} = options;
 
 		this.ptype = "publisher";
@@ -216,6 +219,8 @@ class JanusPublisher extends EventTarget {
 		this.transaction = transaction;
 		
 		this.room_id = room_id;
+
+		this.onError = onError;
 		
 		this.publishing = false;
 
@@ -248,7 +253,7 @@ class JanusPublisher extends EventTarget {
 		await this.attach();
 		
 		const jsep = await this.createOffer(this.mediaConstraints);
-
+		
 		const response = await this.joinandconfigure(jsep);
 
 		return response.load.data.publishers;
@@ -268,20 +273,34 @@ class JanusPublisher extends EventTarget {
 
 		if (this.stream) {
 			const tracks = this.stream.getTracks();
-			tracks.forEach((track) => {
-				track.stop();
-			});
+			for(let i = 0; i < tracks.length; i++) {
+				const track = tracks[i];
+				await track.stop();
+			}
 		}
 
 		this.dispatchEvent(event);
 
 		if (this.publishing) {
-			await this.unpublish();
+			try {
+				await this.unpublish();
+			} catch(error) {
+				this.onError(error);
+			}
 		}
 
 		if (this.attached) {
-			await this.hangup();
-			await this.detach();
+			try {
+				await this.hangup();
+			} catch(error) {
+				this.onError(error);
+			}
+
+			try {
+				await this.detach();
+			} catch(error) {
+				this.onError(error);
+			}
 		}
 		
 	}
@@ -290,10 +309,11 @@ class JanusPublisher extends EventTarget {
 
 	public renegotiate = async ({
 		audio,
-		video
+		video,
+		mediaConstraints
 	}) => {
 
-		const jsep = await this.createOffer(this.mediaConstraints);
+		const jsep = await this.createOffer(mediaConstraints || this.mediaConstraints);
 
 		this.logger.json(jsep);
 		
@@ -468,13 +488,13 @@ class JanusPublisher extends EventTarget {
 		let at = getTransceiver(this.pc, "audio");
 			
 		if (vt && at) {
-			at.direction = "sendonly";
 			vt.direction = "sendonly";
+			at.direction = "sendonly";
 		} else {
 			vt = this.pc.addTransceiver("video", videoOptions);
 			at = this.pc.addTransceiver("audio", audioOptions);
 		}
-			
+		
 		await vt.sender.replaceTrack(videoTrack);
 		
 		await at.sender.replaceTrack(audioTrack);
@@ -523,6 +543,25 @@ class JanusPublisher extends EventTarget {
 		};
 
 		return this.transaction(request);
+		
+	}
+
+
+
+	public leave = async () => {
+
+		const request = {
+			type: "leave",
+			load: {
+				room_id: this.room_id
+			}
+		};
+
+		this.publishing = false;
+
+		const result = await this.transaction(request);
+		
+		return result;
 		
 	}
 
@@ -652,10 +691,10 @@ class JanusPublisher extends EventTarget {
 				handle_id: this.handle_id
 			}
 		};
+		
+		const result = await this.transaction(request);
 
 		this.publishing = false;
-
-		const result = await this.transaction(request);
 		
 		return result;
 
@@ -672,11 +711,13 @@ class JanusPublisher extends EventTarget {
 				handle_id: this.handle_id
 			}
 		};
+		
+		const result = await this.transaction(request);
 
 		this.publishing = false;
 
-		const result = await this.transaction(request);
-		
+		this.attached = false;
+
 		return result;
 		
 	}
@@ -690,25 +731,6 @@ class JanusPublisher extends EventTarget {
 			load: {
 				room_id: this.room_id,
 				handle_id: this.handle_id
-			}
-		};
-
-		this.publishing = false;
-
-		const result = await this.transaction(request);
-		
-		return result;
-		
-	}
-
-
-
-	public leave = async () => {
-
-		const request = {
-			type: "leave",
-			load: {
-				room_id: this.room_id
 			}
 		};
 
@@ -1157,10 +1179,10 @@ class JanusSubscriber extends EventTarget {
 				handle_id: this.handle_id
 			}
 		};
+		
+		const result = await this.transaction(request);
 
 		this.attached = false;
-
-		const result = await this.transaction(request);
 
 		this.handle_id = undefined;
 		
@@ -1364,34 +1386,37 @@ class JanusClient {
 
 
 
-	public replaceVideoTrack = async (videoTrack) => {
-
-		//TODO configure
-		videoTrack.enabled = true;
-
-		if (!this.publisher || !this.publisher.pc) {
-			return;
-		}
+	public replaceVideoTrack = async (deviceId) => {
 		
-		let vt = getTransceiver(this.publisher.pc, "video");
+		try {
 
-		if (!vt) {
-			return;
+			const tracks = this.publisher.stream.getVideoTracks();
+		
+			const track = tracks[0];
+			
+			await track.stop();
+
+		} catch(error) {
+			this.onError(error);
 		}
 
-		vt.sender.replaceTrack(videoTrack)
-		.then((r) => {
-
-			console.log('replace track', r);
-
-		})
-		.catch((error) => {
-
-			console.log('replace track error', error);
-
+		let vt = getTransceiver(this.publisher.pc, "video");
+		
+		const mediaStream = await navigator.mediaDevices.getUserMedia({
+			audio: true,
+			video: { 
+				deviceId: { 
+					exact: deviceId
+				}
+			}
 		});
 		
+		this.publisher.stream = mediaStream;
 
+		const t = mediaStream.getVideoTracks()[0];
+
+		await vt.sender.replaceTrack(t);
+		
 	}
 
 
@@ -1407,6 +1432,57 @@ class JanusClient {
 		clearInterval(this.keepAlive);
 
 		this.keepAlive = undefined;
+		
+	}
+
+
+
+	public join = async (
+		room_id:string,
+		mediaConstraints?: MediaStreamConstraints
+	) : Promise<void> => {
+		
+		this.room_id = room_id;
+
+		if (this.publisher) {
+			try {
+				await this.publisher.terminate();
+				this.publisher.transaction = (...args) => Promise.resolve();
+				delete this.publisher;
+			} catch(error){
+				this.onError(error);
+			}
+		}
+		
+		try {
+
+			this.publisher = new JanusPublisher({
+				room_id: this.room_id,
+				user_id: this.user_id,
+				transaction: this.transaction,
+				logger: this.logger,
+				onError: this.onError,
+				mediaConstraints,
+				rtcConfiguration: this.publisherRtcConfiguration
+			});
+
+			const publishers = await this.publisher.initialize();
+
+			this.onPublisher(this.publisher);
+
+			if (!publishers || !Array.isArray(publishers)) {
+				const error = new Error(`join - publishers incorrect format...`);
+				this.onError(error);
+				return;
+			}
+
+			this.onPublishers(publishers);
+
+		} catch(error) {
+
+			this.onError(error);
+
+		}
 		
 	}
 
@@ -1453,56 +1529,6 @@ class JanusClient {
 
 		this.subscribers = {};
 
-	}
-
-
-
-	public join = async (
-		room_id:string,
-		mediaConstraints?: MediaStreamConstraints
-	) : Promise<void> => {
-		
-		this.room_id = room_id;
-
-		if (this.publisher) {
-			try {
-				await this.publisher.terminate();
-				this.publisher.transaction = (...args) => Promise.resolve();
-				delete this.publisher;
-			} catch(error){
-				this.onError(error);
-			}
-		}
-		
-		try {
-
-			this.publisher = new JanusPublisher({
-				room_id: this.room_id,
-				user_id: this.user_id,
-				transaction: this.transaction,
-				logger: this.logger,
-				mediaConstraints,
-				rtcConfiguration: this.publisherRtcConfiguration
-			});
-
-			const publishers = await this.publisher.initialize();
-
-			this.onPublisher(this.publisher);
-
-			if (!publishers || !Array.isArray(publishers)) {
-				const error = new Error(`join - publishers incorrect format...`);
-				this.onError(error);
-				return;
-			}
-
-			this.onPublishers(publishers);
-
-		} catch(error) {
-
-			this.onError(error);
-
-		}
-		
 	}
 
 
