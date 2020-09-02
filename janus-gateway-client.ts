@@ -824,7 +824,7 @@ class JanusSubscriber extends EventTarget {
 
 
 
-	public initialize = async (options: RTCOfferOptions) : Promise<void> => {
+	public initialize = async (options?: RTCOfferOptions) : Promise<void> => {
 		
 		await this.attach();
 
@@ -1022,7 +1022,7 @@ class JanusSubscriber extends EventTarget {
 
 
 
-	public createAnswer = async (jsep, options: RTCOfferOptions) => {
+	public createAnswer = async (jsep, options?: RTCOfferOptions) => {
 		
 		await this.pc.setRemoteDescription(jsep);
 
