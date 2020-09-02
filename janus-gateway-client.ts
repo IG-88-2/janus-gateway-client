@@ -1259,7 +1259,7 @@ class JanusClient {
 
 		this.logger = logger;
 
-		this.server = server;
+		this.server = `${server}/?id=${user_id}`; //server;
 
 		this.ws = null;
 
@@ -1866,6 +1866,7 @@ class JanusClient {
 			this.logger.json(request);
 			if (this.initializing) {
 				this.logger.info(`transaction - wait until connected...`);
+				//TODO replace with subject
 				await waitUntil(() => Promise.resolve(this.connected), 30000, 500);
 			} else {
 				const error = new Error(`client should be initialized before you can make transaction`);

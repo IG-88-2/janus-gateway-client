@@ -1,11 +1,21 @@
 {
   "name": "janus-gateway-client",
-  "version": "0.0.5",
+  "version": "0.0.52",
   "description": "Janus Gateway Client",
   "author": "Anatoly Strashkevich",
   "repository": "https://github.com/IG-88-2/janus-gateway-client",
   "main": "./index.js",
   "types": "./janus-gateway-client.d.ts",
+  "keywords": [
+    "videoroom",
+    "webrtc",
+    "janus",
+    "janus-gateway",
+    "calls",
+    "videocalls",
+    "video",
+    "react"
+  ],
   "scripts": {
     "build": "rollup -c rollup.config.ts"
   },
