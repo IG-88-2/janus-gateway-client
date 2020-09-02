@@ -3,6 +3,7 @@ Logic related to signaling and negotiation between frontend
 and nodejs backend. Using this package you can establish connection with nodejs server
 which in turn making use of [janus-gateway-node](https://github.com/IG-88-2/janus-gateway-node).  
 Package based upon [video](https://www.youtube.com/watch?v=zxRwELmyWU0&t=1s) about scaling [janus-gateway](https://github.com/meetecho/janus-gateway).  
+This package is used inside [react-janus-videoroom](https://github.com/IG-88-2/react-janus-videoroom).  
 
 ## Getting Started  
 ```
