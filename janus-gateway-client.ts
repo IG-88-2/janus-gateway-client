@@ -1324,10 +1324,6 @@ class JanusClient {
 		);
 
 		this.ws.addEventListener('message', this.onMessage);
-
-		//this.ws.addEventListener('open', this.onOpen); ???
-		
-        this.ws.addEventListener('close', this.onClose);
 		
 		this.ws.addEventListener('error', this.onError);
 		
@@ -1358,8 +1354,6 @@ class JanusClient {
 		this.logger.info(`terminate: remove event listeners...`);
 		
 		this.ws.removeEventListener('message', this.onMessage);
-
-		this.ws.removeEventListener('open', this.onOpen);
 		
         this.ws.removeEventListener('close', this.onClose);
 		
@@ -1541,9 +1535,17 @@ class JanusClient {
 
 		this.connected = true;
 
+		this.ws.removeEventListener('close', this.onClose);
+
+		this.ws.addEventListener('close', this.onClose);
+
 		if (this.notifyConnected) {
 			this.notifyConnected();
 			delete this.notifyConnected;
+		}
+
+		if (this.keepAlive) {
+			clearInterval(this.keepAlive);
 		}
 
 		this.keepAlive = setInterval(() => {
@@ -1577,7 +1579,6 @@ class JanusClient {
 		}
 
 		if (message) {
-
 			const id = message.transaction;
 
 			const isEvent : boolean = !id;
@@ -1590,7 +1591,6 @@ class JanusClient {
 					resolve(message);
 				}
 			}
-
 		}
 
 	}
@@ -1860,6 +1860,8 @@ class JanusClient {
 
 	private transaction = async (request) => {
 
+		this.logger.info(`transaction - ${request.type}`);
+
 		//TODO review
 		if (!this.connected) {
 			this.logger.error(`transaction - not connected...`);
@@ -1876,8 +1878,6 @@ class JanusClient {
 				//await this.initialize();
 			}
 		}
-		
-		const timeout = this.transactionTimeout;
 
 		const id = uuidv1();
 
@@ -1894,21 +1894,20 @@ class JanusClient {
 		
 		p = new Promise((resolve, reject) => {
 			
-			let t = setTimeout(() => {
+			const t = setTimeout(() => {
 				if (!this.connected && !this.initializing) {
 					this.initialize();
 				}
+				this.logger.info(`timeout called for ${id}`);
 				delete this.calls[id];
 				const error = new Error(`${request.type} - timeout`);
 				reject(error);
-			}, timeout);
+			}, this.transactionTimeout);
 			
 			const f = (message) => {
-				
+				this.logger.info(`resolving transaction ${id} - ${message.transaction}`);
 				if (message.transaction===id) {
-					if (timeout) {
-						clearTimeout(t);
-					}
+					clearTimeout(t);
 					delete this.calls[id];
 					if (message.type==="error") {
 						this.logger.error(request);
