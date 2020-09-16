@@ -1941,7 +1941,8 @@ class JanusClient {
 		bitrate:number,
 		bitrate_cap:boolean,
 		videocodec:string,
-		vp9_profile:string
+		vp9_profile:string,
+		permanent:boolean
 	) => {
 
 		return this.transaction({ 
@@ -1951,7 +1952,8 @@ class JanusClient {
 				bitrate,
 				bitrate_cap,
 				videocodec,
-				vp9_profile
+				vp9_profile,
+				permanent
 			} 
 		});
 
