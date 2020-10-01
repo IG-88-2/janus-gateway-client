@@ -46,6 +46,7 @@ interface JanusOptions {
 	transactionTimeout: number,
 	keepAliveInterval: number,
 	user_id:string,
+	socketOptions?
 	logger: {
 		enable: () => void,
 		disable: () => void,
@@ -1250,9 +1251,12 @@ class JanusClient {
 			publisherRtcConfiguration,
 			transactionTimeout,
 			keepAliveInterval,
-			user_id
+			user_id,
+			socketOptions
 		} = options;
 		
+		console.log('janus socket options', socketOptions);
+
 		this.user_id = user_id;
 
 		this.WebSocket = WebSocket;
@@ -1283,10 +1287,13 @@ class JanusClient {
 
 		this.onSubscriber = onSubscriber;
 
+		//TODO ws.refresh()
+
 		this.socketOptions = {
 			WebSocket,
-			connectionTimeout: 1000,
-			maxRetries: 10
+			connectionTimeout: 5000,
+			maxRetries: 50,
+			...(socketOptions || {})
 		};
 
 		this.transactionTimeout = transactionTimeout;
