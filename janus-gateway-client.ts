@@ -1390,13 +1390,19 @@ class JanusClient {
 	public replaceVideoTrack = async (deviceId) => {
 		
 		try {
-
 			const tracks = this.publisher.stream.getVideoTracks();
-		
-			const track = tracks[0];
-			
-			await track.stop();
 
+			const audioTracks = this.publisher.stream.getAudioTracks();
+
+			for(let i = 0; i < tracks.length; i++) {
+				const track = tracks[i];
+				await track.stop();
+			}
+
+			for(let j = 0; j < audioTracks.length; j++) {
+				const track = audioTracks[j];
+				await track.stop();
+			}
 		} catch(error) {
 			this.onError(error);
 		}
