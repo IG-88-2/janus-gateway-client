@@ -206,12 +206,34 @@ class JanusPublisher extends EventTarget {
 
 
 
+	private suspendStream = async () => {
+		const tracks = this.stream.getTracks();
+		for(let i = 0; i < tracks.length; i++) {
+			const track = tracks[i];
+			await track.stop();
+		}
+		this.stream = undefined;
+	}
+
+
+
 	public initialize = async () => {
 
 		await this.attach();
 
-		const jsep = await this.createOffer(this.mediaConstraints);
-		
+		let jsep = null;
+
+		try {
+			jsep = await this.createOffer(this.mediaConstraints);
+		} catch(error) {
+			if (this.stream && this.terminated) {
+				await this.suspendStream();
+				throw new Error("client terminated");
+			} else {
+				throw error;
+			}
+		}
+
 		const response = await this.joinandconfigure(jsep);
 
 		return response.load.data.publishers;
@@ -272,9 +294,20 @@ class JanusPublisher extends EventTarget {
 		video,
 		mediaConstraints
 	}) => {
+		
+		let jsep = null;
 
-		const jsep = await this.createOffer(mediaConstraints || this.mediaConstraints);
-
+		try {
+			jsep = await this.createOffer(mediaConstraints || this.mediaConstraints);
+		} catch(error) {
+			if (this.stream && this.terminated) {
+				await this.suspendStream();
+				throw new Error("client terminated");
+			} else {
+				throw error;
+			}
+		}
+		
 		this.logger.json(jsep);
 		
 		const configured = await this.configure({
