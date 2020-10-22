@@ -1877,9 +1877,6 @@ class JanusClient {
 		p = new Promise((resolve, reject) => {
 			
 			const t = setTimeout(() => {
-				if (!this.connected && !this.initializing) {
-					this.initialize();
-				}
 				this.logger.info(`timeout called for ${id}`);
 				delete this.calls[id];
 				const error = new Error(`${request.type} - timeout`);
