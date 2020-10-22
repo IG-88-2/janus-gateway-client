@@ -118,50 +118,6 @@ const getTransceiver = (pc:RTCPeerConnection, kind:"audio" | "video") : RTCRtpTr
 
 
 
-const waitUntil = async (f : (t:number) => Promise<boolean>, timeout:number, defaultInterval?:number) => {
-
-    let interval = defaultInterval || 1000;
-  
-    let time = 0;
-  
-    const w = async (resolve:() => void, reject:(error:any) => void) => {
-  
-        let done = false; 
-      
-        try {
-            
-            done = await f(time);
-    
-        } catch(e) {
-
-        }
-  
-        if (done) {
-
-            resolve();
-
-        } else if(timeout && time > timeout) {
-            
-            const error = new Error('waitUntil - timeout');
-
-            reject(error); 
-
-        } else {
-        
-            time += interval;
-    
-            setTimeout(() => w(resolve, reject), interval); 
-        
-        }
-  
-    };
-  
-    return new Promise(w);
-  
-}
-
-
-
 class JanusPublisher extends EventTarget {
 	id: string
 	room_id: string
@@ -194,6 +150,7 @@ class JanusPublisher extends EventTarget {
 	mediaConstraints: any
 	logger: Logger
 	onError: any
+	terminated: boolean
 
 	constructor(options:JanusPublisherOptions) {
 
@@ -252,7 +209,7 @@ class JanusPublisher extends EventTarget {
 	public initialize = async () => {
 
 		await this.attach();
-		
+
 		const jsep = await this.createOffer(this.mediaConstraints);
 		
 		const response = await this.joinandconfigure(jsep);
@@ -264,6 +221,8 @@ class JanusPublisher extends EventTarget {
 
 
 	public terminate = async () => {
+
+		this.terminated = true;
 
 		const event = new Event('terminated');
 
@@ -336,6 +295,10 @@ class JanusPublisher extends EventTarget {
 		
 		this.pc = new RTCPeerConnection(configuration);
 
+		if (this.statsInterval) {
+			clearInterval(this.statsInterval);
+		}
+
 		this.statsInterval = setInterval(() => {
 
 			this.pc.getStats()
@@ -407,6 +370,16 @@ class JanusPublisher extends EventTarget {
 
 			this.logger.info(`[${this.ptype}] onicegatheringstatechange ${this.pc.signalingState}`);
 			
+			if (this.pc.signalingState==="closed" && !this.terminated) {
+				this.renegotiate({
+					audio: true,
+					video: true,
+					mediaConstraints: this.mediaConstraints
+				})
+				.then((reconfigured) => this.logger.json(reconfigured))
+				.catch((error) => this.logger.error(error));
+			}
+
 		};
 
 		this.pc.onicecandidateerror = error => {
@@ -492,6 +465,10 @@ class JanusPublisher extends EventTarget {
 			vt.direction = "sendonly";
 			at.direction = "sendonly";
 		} else {
+			//TODO DOMException: Failed to execute 'addTransceiver' on 'RTCPeerConnection': The RTCPeerConnection's signalingState is 'closed'
+			if (this.pc.signalingState==="closed" && !this.terminated) {
+				this.createPeerConnection(this.rtcConfiguration);
+			}
 			vt = this.pc.addTransceiver("video", videoOptions);
 			at = this.pc.addTransceiver("audio", audioOptions);
 		}
@@ -521,6 +498,7 @@ class JanusPublisher extends EventTarget {
 
 		const result = await this.transaction(request);
 
+		//TODO result undefined due to connection already terminated
 		this.handle_id = result.load;
 
 		this.attached = true;
@@ -777,7 +755,9 @@ class JanusSubscriber extends EventTarget {
 	signalingState: any
 	statsInterval: any
 	stats: any
+	rtcConfiguration: any
 	logger: Logger
+	terminated: boolean
 
 	constructor(options:JanusSubscriberOptions) {
 
@@ -802,6 +782,8 @@ class JanusSubscriber extends EventTarget {
 		this.ptype = "subscriber";
 
 		this.attached = false;
+
+		this.rtcConfiguration = rtcConfiguration;
 
 		this.volume = {
 			value: null,
@@ -847,6 +829,8 @@ class JanusSubscriber extends EventTarget {
 
 		const event = new Event('terminated');
 
+		this.terminated = true;
+
 		this.dispatchEvent(event);
 
 		if (this.pc) {
@@ -866,6 +850,10 @@ class JanusSubscriber extends EventTarget {
 	public createPeerConnection = (configuration?: RTCConfiguration) => {
 		
 		this.pc = new RTCPeerConnection(configuration);
+
+		if (this.statsInterval) {
+			clearInterval(this.statsInterval);
+		}
 
 		this.statsInterval = setInterval(() => {
 
@@ -1045,6 +1033,10 @@ class JanusSubscriber extends EventTarget {
 			at.direction = "recvonly";
 			vt.direction = "recvonly";
 		} else {
+			//TODO DOMException: Failed to execute 'addTransceiver' on 'RTCPeerConnection': The RTCPeerConnection's signalingState is 'closed'
+			if (this.pc.signalingState==="closed" && !this.terminated) {
+				this.createPeerConnection(this.rtcConfiguration);
+			}
 			vt = this.pc.addTransceiver("video", { direction: "recvonly" });
 			at = this.pc.addTransceiver("audio", { direction: "recvonly" });
 		}
@@ -1456,40 +1448,29 @@ class JanusClient {
 				await this.publisher.terminate();
 				this.publisher.transaction = (...args) => Promise.resolve();
 				delete this.publisher;
-			} catch(error){
-				this.onError(error);
-			}
+			} catch(error) {}
 		}
-		
-		try {
 
-			this.publisher = new JanusPublisher({
-				room_id: this.room_id,
-				user_id: this.user_id,
-				transaction: this.transaction,
-				logger: this.logger,
-				onError: this.onError,
-				mediaConstraints,
-				rtcConfiguration: this.publisherRtcConfiguration
-			});
+		this.publisher = new JanusPublisher({
+			room_id: this.room_id,
+			user_id: this.user_id,
+			transaction: this.transaction,
+			logger: this.logger,
+			onError: this.onError,
+			mediaConstraints,
+			rtcConfiguration: this.publisherRtcConfiguration
+		});
 
-			const publishers = await this.publisher.initialize();
+		const publishers = await this.publisher.initialize();
 
-			this.onPublisher(this.publisher);
+		this.onPublisher(this.publisher);
 
-			if (!publishers || !Array.isArray(publishers)) {
-				const error = new Error(`join - publishers incorrect format...`);
-				this.onError(error);
-				return;
-			}
-
-			this.onPublishers(publishers);
-
-		} catch(error) {
-
-			this.onError(error);
-
+		if (!publishers || !Array.isArray(publishers)) {
+			const error = new Error(`could not retrieve participants info`);
+			throw error;
 		}
+
+		this.onPublishers(publishers);
 		
 	}
 
@@ -1842,7 +1823,7 @@ class JanusClient {
 	}
 
 
-
+	
 	public pause = async () => {
 
 		if (!this.publisher) {
@@ -1874,22 +1855,10 @@ class JanusClient {
 	private transaction = async (request) => {
 
 		this.logger.info(`transaction - ${request.type}`);
-
-		//TODO review
+		
 		if (!this.connected) {
-			this.logger.error(`transaction - not connected...`);
-			this.logger.json(request);
-			if (this.initializing) {
-				this.logger.info(`transaction - wait until connected...`);
-				//TODO replace with subject
-				await waitUntil(() => Promise.resolve(this.connected), 30000, 500);
-			} else {
-				const error = new Error(`client should be initialized before you can make transaction`);
-				this.onError(error);
-				return;
-				//this.logger.info(`transaction - initialize...`);
-				//await this.initialize();
-			}
+			const error = new Error(`client should be initialized before you can make transaction`);
+			throw error;
 		}
 
 		const id = uuidv1();
@@ -1930,7 +1899,6 @@ class JanusClient {
 						resolve(message);
 					}
 				}
-
 			};
 			
 			this.calls[id] = f;
