@@ -144,8 +144,6 @@ class JanusPublisher extends EventTarget {
 	iceConnectionState: any
 	iceGatheringState: any
 	signalingState: any
-	statsInterval: any
-	stats: any
 	rtcConfiguration: any
 	mediaConstraints: any
 	logger: Logger
@@ -249,7 +247,6 @@ class JanusPublisher extends EventTarget {
 		const event = new Event('terminated');
 
 		if (this.pc) {
-			clearInterval(this.statsInterval);
 			this.pc.close();
 		}
 
@@ -327,26 +324,6 @@ class JanusPublisher extends EventTarget {
 	private createPeerConnection = (configuration?: RTCConfiguration) => {
 		
 		this.pc = new RTCPeerConnection(configuration);
-
-		if (this.statsInterval) {
-			clearInterval(this.statsInterval);
-		}
-
-		this.statsInterval = setInterval(() => {
-
-			this.pc.getStats()
-			.then((stats) => {
-
-				this.stats = stats;
-
-			})
-			.catch((error) => {
-
-				this.logger.error(error);
-
-			});
-
-		}, 3000);
 
 		this.pc.onicecandidate = (event) => {
 			
@@ -786,8 +763,6 @@ class JanusSubscriber extends EventTarget {
 	iceConnectionState: any
 	iceGatheringState: any
 	signalingState: any
-	statsInterval: any
-	stats: any
 	rtcConfiguration: any
 	logger: Logger
 	terminated: boolean
@@ -867,7 +842,6 @@ class JanusSubscriber extends EventTarget {
 		this.dispatchEvent(event);
 
 		if (this.pc) {
-			clearInterval(this.statsInterval);
 			this.pc.close();
 		}
 
@@ -883,26 +857,6 @@ class JanusSubscriber extends EventTarget {
 	public createPeerConnection = (configuration?: RTCConfiguration) => {
 		
 		this.pc = new RTCPeerConnection(configuration);
-
-		if (this.statsInterval) {
-			clearInterval(this.statsInterval);
-		}
-
-		this.statsInterval = setInterval(() => {
-
-			this.pc.getStats()
-			.then((stats) => {
-				
-				this.stats = stats;
-
-			})
-			.catch((error) => {
-
-				this.logger.error(error);
-
-			});
-
-		}, 3000);
 		
 		this.pc.onicecandidate = (event) => {
 			
